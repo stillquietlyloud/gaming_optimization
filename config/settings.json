@@ -1,0 +1,42 @@
+{
+    "_comment": "GamingOptimizer user-tunable settings. Edit and re-run GamingOptimizer.ps1.",
+
+    "EnableHAGS": true,
+    "_EnableHAGS_help": "Enable Hardware-Accelerated GPU Scheduling. Requires Win11 + WDDM 2.7 driver. Disable if you experience instability.",
+
+    "DisablePowerThrottling": true,
+    "_DisablePowerThrottling_help": "Prevent Windows from throttling CPU frequency for background work.",
+
+    "DisableVisualEffects": true,
+    "_DisableVisualEffects_help": "Disable desktop animations and transparency for reduced GPU overhead.",
+
+    "NetworkOptimizations": true,
+    "_NetworkOptimizations_help": "Disable Nagle algorithm and set multimedia network-throttling index.",
+
+    "StopNonEssentialServices": true,
+    "_StopNonEssentialServices_help": "Temporarily stop background services like SysMain, Windows Search, etc.",
+
+    "BoostLauncherPriorities": true,
+    "_BoostLauncherPriorities_help": "Raise game-launcher process priority to AboveNormal.",
+
+    "MmcssGamingProfile": true,
+    "_MmcssGamingProfile_help": "Configure the Windows MMCSS Games scheduling profile.",
+
+    "GameMode": true,
+    "_GameMode_help": "Enable Windows 11 Game Mode (concentrates CPU/GPU resources on the game).",
+
+    "FullscreenOptimizations": true,
+    "_FullscreenOptimizations_help": "Optimize Game DVR and Fullscreen Exclusive behaviour.",
+
+    "PowerPlan": "UltimatePerformance",
+    "_PowerPlan_help": "Power plan to activate: 'UltimatePerformance' (default), 'HighPerformance', or a custom GUID.",
+
+    "LogLevel": "Normal",
+    "_LogLevel_help": "Verbosity: 'Silent', 'Normal', or 'Verbose'.",
+
+    "AutoRestoreAtLogon": true,
+    "_AutoRestoreAtLogon_help": "Register a Scheduled Task to automatically restore the original state at the next logon/reboot.",
+
+    "StateFileDir": "",
+    "_StateFileDir_help": "Override directory for the state snapshot file. Leave empty to use %ProgramData%\\GamingOptimizer."
+}

@@ -1,0 +1,18 @@
+{
+    "_comment": "Rename this file to streaming.json and fill in your values. streaming.json is git-ignored and will never be committed.",
+
+    "YouTubeStreamKey": "xxxx-xxxx-xxxx-xxxx-xxxx",
+    "_YouTubeStreamKey_help": "Your YouTube Live stream key. Find it in YouTube Studio → Go Live → Stream key.",
+
+    "OBSPath": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+    "_OBSPath_help": "Full path to obs64.exe. Adjust if you installed OBS to a custom location.",
+
+    "OBSProfileName": "YouTubeGame",
+    "_OBSProfileName_help": "Name of the OBS profile configured for YouTube streaming. Create this profile in OBS → Profile → New.",
+
+    "OBSSceneCollection": "GameStreamOnly",
+    "_OBSSceneCollection_help": "Name of the OBS scene collection that uses Game Capture (not Display Capture) and Application Audio Capture scoped to the game executable only.",
+
+    "GameProcessNames": [],
+    "_GameProcessNames_help": "Process names to watch (e.g. [\"MyGame.exe\", \"AnotherGame.exe\"]). Leave empty [] to auto-detect any new full-screen application."
+}

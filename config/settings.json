@@ -38,5 +38,11 @@
     "_AutoRestoreAtLogon_help": "Register a Scheduled Task to automatically restore the original state at the next logon/reboot.",
 
     "StateFileDir": "",
-    "_StateFileDir_help": "Override directory for the state snapshot file. Leave empty to use %ProgramData%\\GamingOptimizer."
+    "_StateFileDir_help": "Override directory for the state snapshot file. Leave empty to use %ProgramData%\\GamingOptimizer.",
+
+    "EnableStreaming": false,
+    "_EnableStreaming_help": "Set to true to automatically start/stop OBS Studio streaming when a game is detected. Requires config\\streaming.json to be filled in.",
+
+    "StreamingConfigPath": "",
+    "_StreamingConfigPath_help": "Override path to streaming.json. Leave empty to use the default config\\streaming.json next to this file."
 }

@@ -1,10 +1,12 @@
 # GamingOptimizer for Windows 11
 
-A one-command optimization pipeline for Windows 11 (25H1 / 25H2) that
-switches your system to a peak-gaming configuration, **automatically streams
-your gameplay to YouTube via OBS Studio**, and **restores your original
-settings at the next reboot / logon** — no permanent changes, no stability
-risks.
+A one-command optimization pipeline that turns a fresh Windows 11 Pro install
+into a **dedicated gaming console**. Run the script once and your system is
+permanently optimized for peak gaming performance, with optional automatic
+YouTube streaming via OBS Studio.
+
+This is designed for a dedicated gaming NVMe — optimizations are applied once
+and persist across reboots. There is no revert path by design.
 
 ---
 
@@ -20,11 +22,11 @@ risks.
 | **Visual FX** | Disables desktop animations & transparency |
 | **Network** | Disables Nagle algorithm; sets `NetworkThrottlingIndex` to unlimited |
 | **Memory** | Keeps kernel pages in RAM (`DisablePagingExecutive`) |
-| **Background services** | Temporarily stops SysMain, Windows Search, telemetry, etc. |
+| **Background services** | Stops SysMain, Windows Search, telemetry, etc. |
 | **Launcher priorities** | Raises Steam, Epic, Battle.net, EA App, etc. to AboveNormal |
 | **Fullscreen / GameDVR** | Disables Game DVR recording overhead; enables FSO |
 | **Game streaming** | Auto-detects game launch → starts OBS Studio → streams to YouTube; stops when the game exits |
-| **Auto-restore** | Registers a Scheduled Task to undo every change at next logon |
+| **Kiosk profile** | Full console experience: auto-logon, shell replacement, startup filtering |
 
 ### What is **never** touched
 
@@ -60,14 +62,11 @@ No hardware modifications (overclocking, voltage changes) are ever performed.
 # From an elevated PowerShell window:
 cd path\to\gaming_optimization
 
-# Apply all optimizations (captures state first)
+# Apply all optimizations (permanent)
 .\GamingOptimizer.ps1 -Mode Enable
 
 # Check current status
 .\GamingOptimizer.ps1 -Mode Status
-
-# Restore original settings now (without waiting for reboot)
-.\GamingOptimizer.ps1 -Mode Disable
 ```
 
 ### Option C — Game streaming mode
@@ -87,6 +86,37 @@ game is detected, and stops OBS when the game exits. See
 .\GamingOptimizer.ps1 -Mode Enable -NoPrompt
 ```
 
+### Gaming kiosk profile deployment (persistent console setup)
+
+Use this when you want a permanent console-like daily mode on Windows 11 Pro
+installed on a dedicated NVMe drive. Optimizations are applied once and
+persist — there is no rollback path.
+
+```powershell
+# Deploy with default DedicatedGaming profile (console-like mode)
+.\GamingKioskProfile.ps1 -Mode Deploy
+
+# Show kiosk status
+.\GamingKioskProfile.ps1 -Mode Status
+```
+
+Configuration file:
+
+`config\kiosk.settings.json`
+
+Key options include:
+- `Profile`: `Conservative`, `Aggressive`, or `DedicatedGaming`
+- Launcher setup (`Playnite` fullscreen or `Steam` Big Picture)
+- Optional auto-logon for a dedicated gaming account
+- Optional shell replacement for full console UX
+- Configurable startup deny list (`StartupDenyList`) for noisy background apps
+- Optional startup allow list (`StartupAllowList`) + `EnforceGamingOnlyStartup` for gaming-only boot entries
+- Conditional low-risk service toggles (print/location/diagnostics/etc.)
+- Optional VBS/HVCI disable (only when validated for your game/anti-cheat set)
+
+> ⚠️ `AutoLogon` stores credentials in plaintext Winlogon registry values.
+> Use only on physically secured, dedicated gaming systems.
+
 ---
 
 ## How it works
@@ -95,15 +125,29 @@ game is detected, and stops OBS when the game exits. See
 ┌─────────────────────────────────────────────────────────────────┐
 │  GamingOptimizer.ps1  (orchestrator)                            │
 │                                                                 │
-│  Enable mode                     Disable mode (or at logon)     │
-│  ─────────────────                ────────────────────────────  │
-│  1. Save-SystemState  ──────────► 1. Disable-GamingOptimizations│
-│     (snapshot to JSON)            2. Stop-StreamingWatcher       │
-│  2. Enable-GamingOptimizations    3. Restore-SystemState        │
-│  3. Register-RestoreTask             (from JSON snapshot)        │
-│     (runs at next logon)          4. Remove-RestoreTask          │
-│  4. Start-StreamingWatcher        5. Delete snapshot file        │
-│     (if EnableStreaming=true)                                    │
+│  Enable mode (one-time, permanent)                              │
+│  ──────────────────────────────────                             │
+│  1. Enable-GamingOptimizations                                  │
+│     (registry tweaks, power plan, services, priorities)         │
+│  2. Start-StreamingWatcher                                      │
+│     (if EnableStreaming=true in config)                          │
+│                                                                 │
+│  Status mode                                                    │
+│  ───────────                                                    │
+│  Show current optimization state                                │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  GamingKioskProfile.ps1  (full console deployment)              │
+│                                                                 │
+│  Deploy mode                                                    │
+│  ───────────                                                    │
+│  1. Apply gaming defaults (Game Mode, DVR, FSO)                 │
+│  2. Set Ultimate Performance power plan                         │
+│  3. Disable startup noise (deny list, optional allow list)      │
+│  4. Apply Explorer policies (clean desktop UX)                  │
+│  5. Optional: auto-logon, shell replacement, service stops      │
+│  6. Optional: security tuning (VBS/HVCI disable)                │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -119,10 +163,8 @@ game is detected, and stops OBS when the game exits. See
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-State is saved to `%ProgramData%\GamingOptimizer\system_state.json`.
-The Scheduled Task (`GamingOptimizer_Restore`) runs as **SYSTEM** at the
-next logon and calls `GamingOptimizer.ps1 -Mode Disable -NoPrompt`,
-then removes itself.
+All optimizations are permanent — they persist across reboots.
+This is by design for a dedicated gaming console OS.
 
 ---
 
@@ -143,7 +185,6 @@ Edit `config\settings.json` to enable or disable individual optimizations:
   "FullscreenOptimizations":  true,   // Game DVR off, FSO on
   "PowerPlan":                "UltimatePerformance",
   "LogLevel":                 "Normal",   // Silent | Normal | Verbose
-  "AutoRestoreAtLogon":       true,   // Register startup restore task
   "EnableStreaming":          false,   // Enable OBS game-streaming automation
   "StreamingConfigPath":      ""      // Override path to streaming.json
 }
@@ -189,17 +230,19 @@ To enable automatic YouTube streaming when a game is detected:
 
 ```
 gaming_optimization/
+├── GamingKioskProfile.ps1           ← Persistent kiosk profile deploy
 ├── GamingOptimizer.ps1              ← Main entry point / orchestrator
 ├── config/
 │   ├── settings.json                ← User-tunable configuration
+│   ├── kiosk.settings.json          ← Kiosk profile settings (Conservative/Aggressive/DedicatedGaming)
 │   └── streaming.example.json       ← Template for streaming credentials
 ├── launcher/
 │   ├── Start-GamingOptimizer.cmd    ← UAC-elevating batch launcher
+│   ├── Start-GamingKioskProfile.cmd ← Kiosk deploy launcher
 │   └── Start-GameStream.cmd         ← Streaming mode launcher (optimizes + streams)
 ├── modules/
 │   ├── ProtectedItems.psm1          ← Lists of protected services & processes
-│   ├── StateCapture.psm1            ← Snapshot & restore system state
-│   ├── Optimizations.psm1           ← Apply / revert all gaming tweaks
+│   ├── Optimizations.psm1           ← Apply all gaming tweaks (permanent)
 │   └── Streaming.psm1              ← OBS game-streaming automation
 └── tests/
     └── Invoke-Tests.ps1             ← Self-contained test suite
@@ -222,17 +265,31 @@ are automatically skipped when run in CI or without elevation.
 
 ---
 
+## Compatibility validation matrix (recommended after kiosk deploy)
+
+- Launchers/sign-in: Steam, Epic, Battle.net, EA App, Ubisoft Connect
+- Game Pass/Xbox app sign-in and install/update flow
+- Anti-cheat game checks: EAC, BattlEye, Riot Vanguard
+- Controller hot-plug, audio device switching, sleep/wake resume
+
+---
+
+## Operational model for daily use
+
+- Keep a scheduled patch window for Windows + launcher updates
+- Pin tested GPU/chipset driver versions and update deliberately
+- Use kiosk mode for daily play; administer via the desktop OS on the other NVMe
+
+---
+
 ## Safety notes
 
-* **Reboot-safe**: every change is captured before it is made; the Scheduled
-  Task reverts everything at the next logon even if you forget to run
-  `-Mode Disable`.
+* **Permanent optimizations**: changes are applied once and persist across
+  reboots. This OS is a dedicated game console — there is no revert path.
 * **No hardware changes**: no overclocking, no voltage tweaks, no firmware
   interaction.
 * **Anti-cheat friendly**: Defender, secure-boot, kernel integrity, and all
   anti-cheat services remain untouched.
-* **Idempotent disable**: running `-Mode Disable` when no state file exists
-  still safely reverts known registry tweaks.
 * **Stream privacy**: When OBS is configured with Game Capture and Application
   Audio Capture as recommended, only the game window and its audio are
   streamed. Verify your OBS scene collection setup before going live. The

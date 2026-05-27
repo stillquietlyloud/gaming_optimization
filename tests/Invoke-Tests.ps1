@@ -5,10 +5,9 @@
     No external test framework required – runs on any machine with PS 5.1+.
 
 .DESCRIPTION
-    Tests are grouped into sections matching the three main modules:
+    Tests are grouped into sections matching the main modules:
       1. ProtectedItems  – list contents and helper functions
-      2. StateCapture    – Save / Restore / task registration logic
-      3. Optimizations   – registry/service helper validation
+      2. Optimizations   – registry/service helper validation
 
     Because the optimizer targets Windows APIs, tests that require actual
     system calls (Set-Service, powercfg, Register-ScheduledTask) are
@@ -176,96 +175,7 @@ it 'Get-ProtectedServices returns unique values only' {
 }
 
 # ---------------------------------------------------------------------------
-# ── MODULE 2: StateCapture ────────────────────────────────────────────────
-# ---------------------------------------------------------------------------
-Write-Host ''
-Write-Host '━━━ StateCapture module ━━━' -ForegroundColor Cyan
-
-Import-Module (Join-Path $ModulesDir 'StateCapture.psm1') -Force
-
-it 'Get-StateFilePath returns a non-empty string' {
-    $path = Get-StateFilePath
-    Assert-True ($path.Length -gt 0) 'StateFilePath should not be empty'
-}
-
-it 'Get-StateFilePath returns a .json path' {
-    Assert-True ((Get-StateFilePath) -like '*.json')
-}
-
-it 'Test-StateExists returns a boolean' {
-    $result = Test-StateExists
-    Assert-True (($result -eq $true) -or ($result -eq $false))
-}
-
-if ($IsWindowsOS -and $IsAdmin) {
-    it 'Save-SystemState creates the state file' {
-        # Remove any pre-existing state
-        $path = Get-StateFilePath
-        if (Test-Path $path) { Remove-Item $path -Force }
-
-        $saved = Save-SystemState
-        Assert-True (Test-Path $saved) 'State file should exist after Save-SystemState'
-    }
-
-    it 'Save-SystemState state file is valid JSON' {
-        $path = Get-StateFilePath
-        Assert-True (Test-Path $path)
-        $json = Get-Content $path -Raw | ConvertFrom-Json
-        Assert-NotNull $json
-    }
-
-    it 'Saved state contains required top-level keys' {
-        $path = Get-StateFilePath
-        $json = Get-Content $path -Raw | ConvertFrom-Json
-        Assert-NotNull $json.CapturedAt
-        Assert-NotNull $json.Services
-        Assert-NotNull $json.Registry
-    }
-
-    it 'Saved state CapturedAt is a parseable date' {
-        $path = Get-StateFilePath
-        $json = Get-Content $path -Raw | ConvertFrom-Json
-        $dt = [datetime]$json.CapturedAt
-        Assert-True ($dt -ne $null)
-    }
-
-    it 'Saved state Services is an array' {
-        $path = Get-StateFilePath
-        $json = Get-Content $path -Raw | ConvertFrom-Json
-        Assert-True ($json.Services -is [array] -or $json.Services.GetType().Name -match 'Object')
-    }
-
-    it 'Test-StateExists returns TRUE after Save-SystemState' {
-        Assert-True (Test-StateExists)
-    }
-
-    it 'Restore-SystemState runs without error' {
-        # Just verify it does not throw; state will be restored from the file saved above
-        Restore-SystemState
-    }
-
-    it 'Test-StateExists is still TRUE after Restore-SystemState (file untouched by restore)' {
-        # StateCapture.Restore only changes settings; the file itself is cleaned up by the orchestrator
-        Assert-True (Test-StateExists)
-    }
-
-    # Clean up state file after tests
-    $stateFile = Get-StateFilePath
-    if (Test-Path $stateFile) { Remove-Item $stateFile -Force }
-
-} else {
-    skip 'Save-SystemState creates the state file'    'Requires Admin on Windows'
-    skip 'Save-SystemState state file is valid JSON'  'Requires Admin on Windows'
-    skip 'Saved state contains required top-level keys' 'Requires Admin on Windows'
-    skip 'Saved state CapturedAt is a parseable date'  'Requires Admin on Windows'
-    skip 'Saved state Services is an array'            'Requires Admin on Windows'
-    skip 'Test-StateExists returns TRUE after Save-SystemState' 'Requires Admin on Windows'
-    skip 'Restore-SystemState runs without error'      'Requires Admin on Windows'
-    skip 'Test-StateExists is still TRUE after Restore-SystemState' 'Requires Admin on Windows'
-}
-
-# ---------------------------------------------------------------------------
-# ── MODULE 3: Optimizations ───────────────────────────────────────────────
+# ── MODULE 2: Optimizations ───────────────────────────────────────────────
 # ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host '━━━ Optimizations module ━━━' -ForegroundColor Cyan
@@ -277,18 +187,14 @@ it 'Optimizations module exports Enable-GamingOptimizations' {
     Assert-NotNull $cmd 'Enable-GamingOptimizations should be exported'
 }
 
-it 'Optimizations module exports Disable-GamingOptimizations' {
+it 'Disable-GamingOptimizations is NOT exported (rollback permanently removed)' {
     $cmd = Get-Command Disable-GamingOptimizations -ErrorAction SilentlyContinue
-    Assert-NotNull $cmd 'Disable-GamingOptimizations should be exported'
+    Assert-True ($null -eq $cmd) 'Disable-GamingOptimizations should not be exported on a console OS'
 }
 
 if ($IsWindowsOS -and $IsAdmin) {
     it 'Enable-GamingOptimizations runs without throwing' {
         Enable-GamingOptimizations
-    }
-
-    it 'Disable-GamingOptimizations runs without throwing' {
-        Disable-GamingOptimizations
     }
 
     it 'MMCSS Games profile GPU Priority is 8 after Enable' {
@@ -320,29 +226,12 @@ if ($IsWindowsOS -and $IsAdmin) {
         Assert-Equal $val 1
     }
 
-    it 'Disable-GamingOptimizations resets MMCSS GPU Priority to 2' {
-        Disable-GamingOptimizations
-        $val = (Get-ItemProperty `
-            'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' `
-            -Name 'GPU Priority' -ErrorAction SilentlyContinue).'GPU Priority'
-        Assert-Equal $val 2
-    }
-
-    it 'Disable-GamingOptimizations resets NetworkThrottlingIndex to 10' {
-        $val = (Get-ItemProperty `
-            'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
-            -Name 'NetworkThrottlingIndex' -ErrorAction SilentlyContinue).NetworkThrottlingIndex
-        Assert-Equal $val 10
-    }
 } else {
-    skip 'Enable-GamingOptimizations runs without throwing'            'Requires Admin on Windows'
-    skip 'Disable-GamingOptimizations runs without throwing'           'Requires Admin on Windows'
-    skip 'MMCSS Games profile GPU Priority is 8 after Enable'         'Requires Admin on Windows'
-    skip 'MMCSS Games profile Priority is 6 after Enable'             'Requires Admin on Windows'
-    skip 'NetworkThrottlingIndex is 0xFFFFFFFF after Enable'          'Requires Admin on Windows'
-    skip 'DisablePagingExecutive is 1 after Enable'                   'Requires Admin on Windows'
-    skip 'Disable-GamingOptimizations resets MMCSS GPU Priority to 2' 'Requires Admin on Windows'
-    skip 'Disable-GamingOptimizations resets NetworkThrottlingIndex'  'Requires Admin on Windows'
+    skip 'Enable-GamingOptimizations runs without throwing'    'Requires Admin on Windows'
+    skip 'MMCSS Games profile GPU Priority is 8 after Enable' 'Requires Admin on Windows'
+    skip 'MMCSS Games profile Priority is 6 after Enable'     'Requires Admin on Windows'
+    skip 'NetworkThrottlingIndex is 0xFFFFFFFF after Enable'  'Requires Admin on Windows'
+    skip 'DisablePagingExecutive is 1 after Enable'           'Requires Admin on Windows'
 }
 
 # ---------------------------------------------------------------------------
@@ -368,10 +257,58 @@ it 'config/settings.json contains EnableHAGS key' {
     Assert-NotNull $json.EnableHAGS
 }
 
-it 'config/settings.json contains AutoRestoreAtLogon key' {
+it 'config/settings.json does not contain dead AutoRestoreAtLogon key' {
     $cfg  = Join-Path $RepoRoot 'config\settings.json'
     $json = Get-Content $cfg -Raw | ConvertFrom-Json
-    Assert-NotNull $json.AutoRestoreAtLogon
+    Assert-True ($null -eq $json.PSObject.Properties['AutoRestoreAtLogon']) `
+        'AutoRestoreAtLogon should be removed (rollback permanently disabled)'
+}
+
+it 'config/kiosk.settings.json exists' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    Assert-True (Test-Path $cfg) 'kiosk.settings.json should exist'
+}
+
+it 'config/kiosk.settings.json is valid JSON' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json
+}
+
+it 'config/kiosk.settings.json CreateRestorePoint is false (rollback permanently disabled)' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-True ($json.CreateRestorePoint -eq $false) 'CreateRestorePoint must be false on a console OS'
+}
+
+it 'config/kiosk.settings.json contains Profile key' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.Profile
+}
+
+it 'config/kiosk.settings.json supports DedicatedGaming profile' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.ServiceProfiles.DedicatedGaming
+    Assert-NotNull $json.PowerPlan.DedicatedGaming
+}
+
+it 'config/kiosk.settings.json contains StartupAllowList for gaming-only mode' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-True ($json.StartupAllowList.Count -gt 0) 'StartupAllowList should include launcher/anti-cheat patterns'
+}
+
+it 'config/kiosk.settings.json enables gaming-only startup mode by default' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-True ($json.OptionalFeatures.EnforceGamingOnlyStartup -eq $true) 'EnforceGamingOnlyStartup should default to true'
+}
+
+it 'GamingKioskProfile.ps1 exists' {
+    $scriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
+    Assert-True (Test-Path $scriptPath) 'GamingKioskProfile.ps1 should exist'
 }
 
 it 'config/settings.json contains EnableStreaming key' {
@@ -512,6 +449,67 @@ it 'Read-StreamingConfig throws when OBSPath does not exist on disk' {
 it 'Stop-GameStream does not throw when OBS is not running' {
     # OBS is not installed in the test environment; function should exit cleanly.
     Stop-GameStream
+}
+
+# ---------------------------------------------------------------------------
+# ── GAMING KIOSK PROFILE BEHAVIORAL TESTS ─────────────────────────────────
+# ---------------------------------------------------------------------------
+
+# Extract helper functions from the kiosk script for unit testing.
+# We parse the script AST to avoid executing the top-level param/main logic.
+$kioskScriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
+$kioskAst = [System.Management.Automation.Language.Parser]::ParseFile($kioskScriptPath, [ref]$null, [ref]$null)
+$kioskFunctions = $kioskAst.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+
+# Define kiosk-level variables needed by the extracted functions
+$UltimatePerfGuid = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+$HighPerfGuid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+
+foreach ($fn in $kioskFunctions) {
+    if ($fn.Name -in @('Merge-Hashtable', 'ConvertFrom-PSObjectToHashtable', 'Resolve-PowerPlanGuid')) {
+        . ([ScriptBlock]::Create($fn.Extent.Text))
+    }
+}
+
+it 'Resolve-PowerPlanGuid returns correct GUID for UltimatePerformance' {
+    $result = Resolve-PowerPlanGuid -Name 'UltimatePerformance'
+    Assert-True ($result -eq 'e9a42b02-d5df-448d-aa00-03f14749eb61') `
+        "Expected UltimatePerformance GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid returns correct GUID for HighPerformance' {
+    $result = Resolve-PowerPlanGuid -Name 'HighPerformance'
+    Assert-True ($result -eq '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c') `
+        "Expected HighPerformance GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid passes through a raw GUID string' {
+    $customGuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    $result = Resolve-PowerPlanGuid -Name $customGuid
+    Assert-True ($result -eq $customGuid) `
+        "Expected passthrough of custom GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid throws for invalid plan name' {
+    $threw = $false
+    try { Resolve-PowerPlanGuid -Name 'NotARealPlan' } catch { $threw = $true }
+    Assert-True $threw 'Should throw for unsupported power plan name'
+}
+
+it 'Merge-Hashtable deep-merges nested keys' {
+    $base = @{ a = @{ x = 1; y = 2 }; b = 'keep' }
+    $override = @{ a = @{ y = 99; z = 3 } }
+    $result = Merge-Hashtable -Base $base -Override $override
+    Assert-True ($result.a.x -eq 1) 'Base key a.x should be preserved'
+    Assert-True ($result.a.y -eq 99) 'Override key a.y should replace base'
+    Assert-True ($result.a.z -eq 3) 'New key a.z should be added'
+    Assert-True ($result.b -eq 'keep') 'Unrelated key b should be preserved'
+}
+
+it 'Merge-Hashtable returns base when override is null' {
+    $base = @{ a = 1 }
+    $result = Merge-Hashtable -Base $base -Override $null
+    Assert-True ($result.a -eq 1) 'Base should be returned unchanged'
 }
 
 # ---------------------------------------------------------------------------

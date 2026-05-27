@@ -116,6 +116,8 @@ $defaults = @{
     LogLevel                  = 'Normal'
     AutoRestoreAtLogon        = $true
     StateFileDir              = ''
+    EnableStreaming           = $false
+    StreamingConfigPath       = ''
 }
 foreach ($key in $defaults.Keys) {
     if (-not $Config.ContainsKey($key)) { $Config[$key] = $defaults[$key] }
@@ -137,6 +139,7 @@ $modulesDir = Join-Path $ScriptDir 'modules'
 Import-Module (Join-Path $modulesDir 'ProtectedItems.psm1') -Force
 Import-Module (Join-Path $modulesDir 'StateCapture.psm1')   -Force
 Import-Module (Join-Path $modulesDir 'Optimizations.psm1')  -Force
+Import-Module (Join-Path $modulesDir 'Streaming.psm1')      -Force
 
 # ---------------------------------------------------------------------------
 # Banner
@@ -235,6 +238,21 @@ be altered. No hardware modifications are performed.
     Write-Host ''
     Write-Host '  ► Launch your game and enjoy peak performance!' -ForegroundColor Green
     Write-Host ''
+
+    # Start game-stream watcher if the user opted in.
+    if ($Config.EnableStreaming) {
+        $streamCfgPath = if ($Config.StreamingConfigPath) {
+            $Config.StreamingConfigPath
+        } else {
+            Join-Path $ScriptDir 'config\streaming.json'
+        }
+        try {
+            Start-StreamingWatcher -ConfigPath $streamCfgPath
+        } catch {
+            Write-Warning "[GamingOptimizer] Streaming watcher could not start: $_"
+            Write-Warning '  Verify config\streaming.json is correctly filled in.'
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -260,7 +278,10 @@ function Invoke-DisableMode {
     # 1. Revert optimization-specific registry tweaks
     Disable-GamingOptimizations
 
-    # 2. Restore services, power plan, registry from snapshot
+    # 2. Stop streaming watcher and OBS if they were running.
+    Stop-StreamingWatcher
+
+    # 3. Restore services, power plan, registry from snapshot
     Write-Host '[GamingOptimizer] Restoring system state…' -ForegroundColor Cyan
     Restore-SystemState
 

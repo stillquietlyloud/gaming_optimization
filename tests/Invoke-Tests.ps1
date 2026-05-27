@@ -374,6 +374,146 @@ it 'config/settings.json contains AutoRestoreAtLogon key' {
     Assert-NotNull $json.AutoRestoreAtLogon
 }
 
+it 'config/settings.json contains EnableStreaming key' {
+    $cfg  = Join-Path $RepoRoot 'config\settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull ($json.PSObject.Properties['EnableStreaming']) 'EnableStreaming key should exist in settings.json'
+}
+
+it 'config/streaming.example.json exists' {
+    $cfg = Join-Path $RepoRoot 'config\streaming.example.json'
+    Assert-True (Test-Path $cfg) 'streaming.example.json should exist'
+}
+
+it 'config/streaming.example.json is valid JSON' {
+    $cfg  = Join-Path $RepoRoot 'config\streaming.example.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json
+}
+
+it 'config/streaming.example.json contains YouTubeStreamKey key' {
+    $cfg  = Join-Path $RepoRoot 'config\streaming.example.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.YouTubeStreamKey
+}
+
+it 'config/streaming.json is not tracked in git (git-ignored)' {
+    $gitignore = Join-Path $RepoRoot '.gitignore'
+    Assert-True (Test-Path $gitignore) '.gitignore should exist'
+    $content = Get-Content $gitignore -Raw
+    Assert-True ($content -match 'streaming\.json') '.gitignore should exclude streaming.json'
+}
+
+# ---------------------------------------------------------------------------
+# ── MODULE 4: Streaming ───────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+Write-Host ''
+Write-Host '━━━ Streaming module ━━━' -ForegroundColor Cyan
+
+Import-Module (Join-Path $ModulesDir 'Streaming.psm1') -Force
+
+it 'Streaming module exports Read-StreamingConfig' {
+    Assert-NotNull (Get-Command Read-StreamingConfig -ErrorAction SilentlyContinue) `
+        'Read-StreamingConfig should be exported'
+}
+
+it 'Streaming module exports Start-GameStream' {
+    Assert-NotNull (Get-Command Start-GameStream -ErrorAction SilentlyContinue) `
+        'Start-GameStream should be exported'
+}
+
+it 'Streaming module exports Stop-GameStream' {
+    Assert-NotNull (Get-Command Stop-GameStream -ErrorAction SilentlyContinue) `
+        'Stop-GameStream should be exported'
+}
+
+it 'Streaming module exports Watch-GameProcess' {
+    Assert-NotNull (Get-Command Watch-GameProcess -ErrorAction SilentlyContinue) `
+        'Watch-GameProcess should be exported'
+}
+
+it 'Streaming module exports Start-StreamingWatcher' {
+    Assert-NotNull (Get-Command Start-StreamingWatcher -ErrorAction SilentlyContinue) `
+        'Start-StreamingWatcher should be exported'
+}
+
+it 'Streaming module exports Stop-StreamingWatcher' {
+    Assert-NotNull (Get-Command Stop-StreamingWatcher -ErrorAction SilentlyContinue) `
+        'Stop-StreamingWatcher should be exported'
+}
+
+it 'Read-StreamingConfig throws when config file does not exist' {
+    $threw = $false
+    try {
+        Read-StreamingConfig -ConfigPath 'C:\nonexistent\streaming.json'
+    } catch {
+        $threw = $true
+    }
+    Assert-True $threw 'Read-StreamingConfig should throw for a missing file'
+}
+
+it 'Read-StreamingConfig throws when YouTubeStreamKey is the placeholder' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = 'xxxx-xxxx-xxxx-xxxx-xxxx'
+            OBSPath          = 'C:\Program Files\obs-studio\bin\64bit\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw for placeholder stream key'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Read-StreamingConfig throws when YouTubeStreamKey is empty' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = ''
+            OBSPath          = 'C:\obs\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw for empty stream key'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Read-StreamingConfig throws when OBSPath does not exist on disk' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = 'real-key-value'
+            OBSPath          = 'C:\nonexistent\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw when OBS exe is not found'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Stop-GameStream does not throw when OBS is not running' {
+    # OBS is not installed in the test environment; function should exit cleanly.
+    Stop-GameStream
+}
+
 # ---------------------------------------------------------------------------
 # ── SUMMARY ───────────────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------

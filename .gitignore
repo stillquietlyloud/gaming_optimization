@@ -1,0 +1,4 @@
+# Streaming credentials – contains your YouTube stream key.
+# Copy streaming.example.json to streaming.json and fill in your values.
+# This file must NEVER be committed.
+config/streaming.json

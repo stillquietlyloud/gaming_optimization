@@ -404,6 +404,12 @@ it 'config/kiosk.settings.json contains StartupAllowList for gaming-only mode' {
     Assert-True ($json.StartupAllowList.Count -gt 0) 'StartupAllowList should include launcher/anti-cheat patterns'
 }
 
+it 'config/kiosk.settings.json enables gaming-only startup mode by default' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-True ($json.OptionalFeatures.EnforceGamingOnlyStartup -eq $true) 'EnforceGamingOnlyStartup should default to true'
+}
+
 it 'GamingKioskProfile.ps1 exists' {
     $scriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
     Assert-True (Test-Path $scriptPath) 'GamingKioskProfile.ps1 should exist'

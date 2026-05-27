@@ -64,7 +64,7 @@ $Defaults = @{
     }
     OptionalFeatures = @{
         DisableStartupApps = $true
-        EnforceGamingOnlyStartup = $false
+        EnforceGamingOnlyStartup = $true
         DisableWidgets = $true
         DisableConsumerFeatures = $true
         DisableOneDrive = $false
@@ -484,6 +484,8 @@ function Set-AutoLogon {
         return
     }
 
+    Write-Log 'AutoLogon enabled: DefaultPassword will be stored unencrypted under HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon.' 'WARN'
+
     $path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
     Set-RegValue $path 'AutoAdminLogon' '1' -Type String
     Set-RegValue $path 'DefaultUserName' ([string]$Config.AutoLogon.UserName) -Type String
@@ -576,12 +578,28 @@ function Restore-FromState {
     }
     Write-Log 'Restored registry values.'
 
-    foreach ($entry in $state.RunKeys.HKCU) {
-        Set-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' $entry.Name $entry.Value -Type String
+    function Restore-RunKeyEntries {
+        param([string]$RegistryPath, [array]$CapturedEntries)
+
+        $capturedNames = @($CapturedEntries | ForEach-Object { $_.Name })
+        $live = Get-ItemProperty -Path $RegistryPath -ErrorAction SilentlyContinue
+        if ($live) {
+            foreach ($prop in $live.PSObject.Properties) {
+                if ($prop.Name -match '^PS') { continue }
+                if ($capturedNames -notcontains $prop.Name) {
+                    Remove-ItemProperty -Path $RegistryPath -Name $prop.Name -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        foreach ($entry in $CapturedEntries) {
+            Set-RegValue $RegistryPath $entry.Name $entry.Value -Type String
+        }
     }
-    foreach ($entry in $state.RunKeys.HKLM) {
-        Set-RegValue 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' $entry.Name $entry.Value -Type String
-    }
+
+    Restore-RunKeyEntries -RegistryPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -CapturedEntries $state.RunKeys.HKCU
+    Restore-RunKeyEntries -RegistryPath 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -CapturedEntries $state.RunKeys.HKLM
+
     if (-not $state.RunKeys.Launcher.Exists) {
         Remove-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $RunValueName -ErrorAction SilentlyContinue
     }

@@ -5,10 +5,9 @@
 ::
 :: Double-click (or run from a terminal) to start the
 :: gaming optimization pipeline.  Pass a mode as the first
-:: argument:  Enable (default) | Disable | Status
+:: argument:  Enable (default) | Status
 ::
 ::   Start-GamingOptimizer.cmd Enable
-::   Start-GamingOptimizer.cmd Disable
 ::   Start-GamingOptimizer.cmd Status
 :: ============================================================
 setlocal enabledelayedexpansion
@@ -24,12 +23,11 @@ if "%MODE%"=="" set "MODE=Enable"
 
 :: Validate mode
 if /i "%MODE%"=="Enable"  goto :run
-if /i "%MODE%"=="Disable" goto :run
 if /i "%MODE%"=="Status"  goto :run
 
 echo.
 echo  Invalid mode: %MODE%
-echo  Usage: Start-GamingOptimizer.cmd [Enable^|Disable^|Status]
+echo  Usage: Start-GamingOptimizer.cmd [Enable^|Status]
 echo.
 pause
 exit /b 1

@@ -5,7 +5,6 @@
 ::
 :: Usage:
 ::   Start-GamingKioskProfile.cmd Deploy
-::   Start-GamingKioskProfile.cmd Rollback
 ::   Start-GamingKioskProfile.cmd Status
 :: ============================================================
 setlocal enabledelayedexpansion
@@ -18,12 +17,11 @@ set "MODE=%~1"
 if "%MODE%"=="" set "MODE=Deploy"
 
 if /i "%MODE%"=="Deploy" goto :run
-if /i "%MODE%"=="Rollback" goto :run
 if /i "%MODE%"=="Status" goto :run
 
 echo.
 echo  Invalid mode: %MODE%
-echo  Usage: Start-GamingKioskProfile.cmd [Deploy^|Rollback^|Status]
+echo  Usage: Start-GamingKioskProfile.cmd [Deploy^|Status]
 echo.
 pause
 exit /b 1

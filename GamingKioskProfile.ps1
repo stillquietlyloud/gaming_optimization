@@ -17,14 +17,12 @@
 
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [ValidateSet('Deploy', 'Rollback', 'Status')]
+    [ValidateSet('Deploy', 'Status')]
     [string]$Mode = 'Deploy',
 
     [string]$ConfigPath = '',
 
-    [switch]$NoPrompt,
-
-    [switch]$ForceRecapture
+    [switch]$NoPrompt
 )
 
 Set-StrictMode -Version Latest
@@ -37,8 +35,6 @@ if (-not $ConfigPath) {
 
 $ProgramDataRoot = $env:ProgramData
 $KioskRoot = Join-Path $ProgramDataRoot 'GamingOptimizer\kiosk'
-$StatePath = Join-Path $KioskRoot 'kiosk_state.json'
-$RollbackPath = Join-Path $KioskRoot 'Rollback-GamingKiosk.ps1'
 $LogDir = Join-Path $KioskRoot 'logs'
 $LogPath = Join-Path $LogDir ('kiosk_' + (Get-Date -Format 'yyyyMMdd_HHmmss') + '.log')
 $RunValueName = 'GamingKioskLauncher'
@@ -219,26 +215,6 @@ function Set-RegValue {
     Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -Force
 }
 
-function Get-RegSnapshot {
-    param([string]$Path,[string]$Name)
-    try {
-        $obj = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        if ($null -eq $obj) { return @{ Exists = $false; Value = $null } }
-        return @{ Exists = $true; Value = $obj.$Name }
-    } catch {
-        return @{ Exists = $false; Value = $null }
-    }
-}
-
-function Restore-RegValue {
-    param([string]$Path,[string]$Name,[hashtable]$Snapshot,[string]$Type='DWord')
-    if ($Snapshot.Exists) {
-        Set-RegValue -Path $Path -Name $Name -Value $Snapshot.Value -Type $Type
-    } elseif (Test-Path $Path) {
-        Remove-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-    }
-}
-
 function Resolve-PowerPlanGuid {
     param([string]$Name)
     switch ($Name) {
@@ -249,100 +225,6 @@ function Resolve-PowerPlanGuid {
             throw "Unsupported power plan '$Name'."
         }
     }
-}
-
-function Capture-State {
-    param([hashtable]$Config)
-
-    $servicesToCapture = @($Config.ServiceProfiles[$Config.Profile]) | Select-Object -Unique
-    $serviceState = @()
-    foreach ($s in $servicesToCapture) {
-        $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
-        if ($svc) {
-            $serviceState += @{
-                Name = $svc.Name
-                Status = $svc.Status.ToString()
-                StartType = (Get-CimInstance Win32_Service -Filter "Name='$($svc.Name)'" -ErrorAction SilentlyContinue).StartMode
-            }
-        }
-    }
-
-    function Get-RunKeyEntries {
-        param([string]$RegistryPath)
-        $props = Get-ItemProperty -Path $RegistryPath -ErrorAction SilentlyContinue
-        if (-not $props) { return @() }
-        return $props.PSObject.Properties |
-            Where-Object { $_.Name -notmatch '^PS' } |
-            ForEach-Object { @{ Name = $_.Name; Value = $_.Value } }
-    }
-
-    $regKeys = @(
-        @{ Path='HKCU:\Software\Microsoft\GameBar'; Name='AllowAutoGameMode'; Type='DWord' },
-        @{ Path='HKCU:\Software\Microsoft\GameBar'; Name='AutoGameModeEnabled'; Type='DWord' },
-        @{ Path='HKCU:\System\GameConfigStore'; Name='GameDVR_Enabled'; Type='DWord' },
-        @{ Path='HKCU:\System\GameConfigStore'; Name='GameDVR_FSEBehaviorMode'; Type='DWord' },
-        @{ Path='HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; Name='TaskbarDa'; Type='DWord' },
-        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Dsh'; Name='AllowNewsAndInterests'; Type='DWord' },
-        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'; Name='DisableWindowsConsumerFeatures'; Type='DWord' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='EnableLUA'; Type='DWord' },
-        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard'; Name='EnableVirtualizationBasedSecurity'; Type='DWord' },
-        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity'; Name='Enabled'; Type='DWord' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Name='AutoAdminLogon'; Type='String' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Name='DefaultUserName'; Type='String' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Name='DefaultPassword'; Type='String' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Name='DefaultDomainName'; Type='String' },
-        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Name='Shell'; Type='String' }
-    )
-
-    $regState = @()
-    foreach ($entry in $regKeys) {
-        $snapshot = Get-RegSnapshot -Path $entry.Path -Name $entry.Name
-        $regState += @{
-            Path = $entry.Path
-            Name = $entry.Name
-            Type = $entry.Type
-            Exists = $snapshot.Exists
-            Value = $snapshot.Value
-        }
-    }
-
-    $launcherRun = Get-RegSnapshot -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $RunValueName
-
-    $activePlan = (& powercfg /getactivescheme 2>$null)
-    $activePlanGuid = ''
-    if ($activePlan -match 'GUID:\s*([0-9a-fA-F\-]{36})') { $activePlanGuid = $Matches[1] }
-
-    $state = @{
-        CapturedAt = (Get-Date -Format 'o')
-        Profile = $Config.Profile
-        ActivePowerPlanGuid = $activePlanGuid
-        Services = $serviceState
-        Registry = $regState
-        RunKeys = @{
-            HKCU = Get-RunKeyEntries -RegistryPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-            HKLM = Get-RunKeyEntries -RegistryPath 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'
-            Launcher = $launcherRun
-        }
-    }
-
-    $state | ConvertTo-Json -Depth 10 | Set-Content -Path $StatePath -Encoding UTF8 -Force
-    Write-Log "State captured at $StatePath"
-}
-
-function Create-RollbackScript {
-    $mainScriptPath = Join-Path $ScriptDir 'GamingKioskProfile.ps1'
-@"
-#Requires -Version 5.1
-Set-StrictMode -Version Latest
-`$ErrorActionPreference = 'Stop'
-`$scriptPath = '$mainScriptPath'
-if (-not (Test-Path `$scriptPath)) {
-    Write-Error 'GamingKioskProfile.ps1 not found. Run rollback manually with -Mode Rollback from repository root.'
-    exit 1
-}
-& `$scriptPath -Mode Rollback -NoPrompt
-"@ | Set-Content -Path $RollbackPath -Encoding UTF8 -Force
-    Write-Log "Rollback script generated at $RollbackPath"
 }
 
 function Set-GamingDefaults {
@@ -546,108 +428,10 @@ function Stop-SelectedServices {
     }
 }
 
-function New-RestorePoint {
-    param([hashtable]$Config)
-    if (-not $Config.CreateRestorePoint) { return }
-    try {
-        Enable-ComputerRestore -Drive "$($env:SystemDrive)\" -ErrorAction SilentlyContinue
-        Checkpoint-Computer -Description 'Gaming Kiosk Profile - Pre-Deploy' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop | Out-Null
-        Write-Log 'Created system restore point.'
-    } catch {
-        Write-Log "Restore point creation skipped/failed: $_" 'WARN'
-    }
-}
-
-function Restore-FromState {
-    if (-not (Test-Path $StatePath)) {
-        Write-Log "No state file found at $StatePath" 'WARN'
-        return
-    }
-
-    $state = Get-Content -Path $StatePath -Raw | ConvertFrom-Json
-    $state = ConvertFrom-PSObjectToHashtable -InputObject $state
-
-    if ($state.ActivePowerPlanGuid) {
-        & powercfg /setactive $state.ActivePowerPlanGuid 2>$null
-        Write-Log "Restored power plan: $($state.ActivePowerPlanGuid)"
-    }
-
-    foreach ($entry in $state.Registry) {
-        $snapshot = @{ Exists = [bool]$entry.Exists; Value = $entry.Value }
-        Restore-RegValue -Path $entry.Path -Name $entry.Name -Snapshot $snapshot -Type $entry.Type
-    }
-    Write-Log 'Restored registry values.'
-
-    function Restore-RunKeyEntries {
-        param([string]$RegistryPath, [array]$CapturedEntries)
-
-        $capturedNames = @($CapturedEntries | ForEach-Object { $_.Name })
-        $live = Get-ItemProperty -Path $RegistryPath -ErrorAction SilentlyContinue
-        if ($live) {
-            foreach ($prop in $live.PSObject.Properties) {
-                if ($prop.Name -match '^PS') { continue }
-                if ($capturedNames -notcontains $prop.Name) {
-                    Remove-ItemProperty -Path $RegistryPath -Name $prop.Name -ErrorAction SilentlyContinue
-                }
-            }
-        }
-
-        foreach ($entry in $CapturedEntries) {
-            Set-RegValue $RegistryPath $entry.Name $entry.Value -Type String
-        }
-    }
-
-    Restore-RunKeyEntries -RegistryPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -CapturedEntries $state.RunKeys.HKCU
-    Restore-RunKeyEntries -RegistryPath 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -CapturedEntries $state.RunKeys.HKLM
-
-    if (-not $state.RunKeys.Launcher.Exists) {
-        Remove-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $RunValueName -ErrorAction SilentlyContinue
-    }
-    Write-Log 'Restored startup Run key entries.'
-
-    foreach ($svc in $state.Services) {
-        try {
-            $live = Get-Service -Name $svc.Name -ErrorAction SilentlyContinue
-            if (-not $live) { continue }
-
-            if ($svc.StartType) {
-                $startType = switch -Regex ($svc.StartType.ToString()) {
-                    '^Auto$' { 'Automatic' }
-                    '^Manual$' { 'Manual' }
-                    '^Disabled$' { 'Disabled' }
-                    '^(Boot|System)$' {
-                        Write-Log "Service '$($svc.Name)' start mode '$($svc.StartType)' is kernel-managed; skipping startup-type restore." 'WARN'
-                        $null
-                    }
-                    default {
-                        Write-Log "Unknown service start mode '$($svc.StartType)' for '$($svc.Name)'; defaulting to Manual." 'WARN'
-                        'Manual'
-                    }
-                }
-                if ($startType) { Set-Service -Name $svc.Name -StartupType $startType -ErrorAction SilentlyContinue }
-            }
-
-            if ($svc.Status -eq 'Running' -and $live.Status -ne 'Running') {
-                Start-Service -Name $svc.Name -ErrorAction SilentlyContinue
-            } elseif ($svc.Status -eq 'Stopped' -and $live.Status -ne 'Stopped') {
-                Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue
-            }
-        } catch {
-            Write-Log "Could not restore service '$($svc.Name)': $_" 'WARN'
-        }
-    }
-
-    if (Test-Path $StatePath) {
-        Remove-Item -Path $StatePath -Force
-        Write-Log 'Removed state file after rollback.'
-    }
-}
-
 function Show-Status {
     Write-Host ''
     Write-Host '--- Gaming Kiosk Profile Status ---' -ForegroundColor Cyan
-    Write-Host "  State file    : $(if (Test-Path $StatePath) { $StatePath } else { 'Not present' })"
-    Write-Host "  Rollback file : $(if (Test-Path $RollbackPath) { $RollbackPath } else { 'Not present' })"
+    Write-Host '  Mode          : PERMANENT GAMING CONSOLE (rollback disabled)' -ForegroundColor Yellow
     $shell = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'Shell' -ErrorAction SilentlyContinue).Shell
     Write-Host "  Winlogon Shell: $(if ($shell) { $shell } else { 'explorer.exe (default)' })"
     $launcher = (Get-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name $RunValueName -ErrorAction SilentlyContinue).$RunValueName
@@ -660,11 +444,6 @@ function Show-Status {
 function Invoke-Deploy {
     $cfg = Read-Config
 
-    if (Test-Path $StatePath -and -not $ForceRecapture) {
-        Write-Log "State file already exists at $StatePath. Use -ForceRecapture to overwrite." 'WARN'
-        return
-    }
-
     if (-not $NoPrompt) {
         $ans = Read-Host "Deploy gaming kiosk profile '$($cfg.Profile)'? [Y/n]"
         if ($ans -match '^[Nn]') {
@@ -672,10 +451,6 @@ function Invoke-Deploy {
             return
         }
     }
-
-    New-RestorePoint -Config $cfg
-    Capture-State -Config $cfg
-    Create-RollbackScript
 
     Set-GamingDefaults
     Set-PowerPlan -Config $cfg
@@ -690,18 +465,6 @@ function Invoke-Deploy {
     Write-Log 'Recommended next steps: validate launchers, anti-cheat titles, controller hot-plug, audio switch, and sleep/wake.'
 }
 
-function Invoke-Rollback {
-    if (-not $NoPrompt) {
-        $ans = Read-Host 'Rollback gaming kiosk profile now? [Y/n]'
-        if ($ans -match '^[Nn]') {
-            Write-Log 'Rollback aborted by user.'
-            return
-        }
-    }
-    Restore-FromState
-    Write-Log 'Rollback completed.'
-}
-
 if (-not (Test-Administrator)) {
     Write-Error 'GamingKioskProfile must be run as Administrator.'
     exit 1
@@ -709,7 +472,7 @@ if (-not (Test-Administrator)) {
 
 try {
     if (-not $ProgramDataRoot) {
-        throw 'ProgramData environment variable ($env:ProgramData) is not set; cannot persist kiosk state safely. Verify system environment variables.'
+        throw 'ProgramData environment variable ($env:ProgramData) is not set. Verify system environment variables.'
     }
 
     Ensure-Directories
@@ -728,7 +491,6 @@ try {
 
     switch ($Mode) {
         'Deploy'   { Invoke-Deploy }
-        'Rollback' { Invoke-Rollback }
         'Status'   { Show-Status }
     }
 } catch {

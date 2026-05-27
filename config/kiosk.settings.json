@@ -3,7 +3,7 @@
 
     "Profile": "DedicatedGaming",
 
-    "CreateRestorePoint": true,
+    "CreateRestorePoint": false,
 
     "Launcher": {
         "Type": "Playnite",

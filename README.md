@@ -73,6 +73,38 @@ cd path\to\gaming_optimization
 .\GamingOptimizer.ps1 -Mode Enable -NoPrompt
 ```
 
+### Gaming kiosk profile deployment (persistent console setup)
+
+Use this when you want a console-like daily mode on Windows 11 Pro with a
+full rollback path.
+
+```powershell
+# Deploy with default Conservative profile
+.\GamingKioskProfile.ps1 -Mode Deploy
+
+# Show kiosk status
+.\GamingKioskProfile.ps1 -Mode Status
+
+# Roll everything back to captured defaults
+.\GamingKioskProfile.ps1 -Mode Rollback
+```
+
+Configuration file:
+
+`config\kiosk.settings.json`
+
+Key options include:
+- `Profile`: `Conservative` or `Aggressive`
+- Launcher setup (`Playnite` fullscreen or `Steam` Big Picture)
+- Optional auto-logon for a dedicated gaming account
+- Optional shell replacement for full console UX
+- Configurable startup deny list (`StartupDenyList`) for noisy background apps
+- Conditional low-risk service toggles (print/location/diagnostics/etc.)
+- Optional VBS/HVCI disable (only when validated for your game/anti-cheat set)
+
+> ⚠️ `AutoLogon` stores credentials in plaintext Winlogon registry values.
+> Use only on physically secured, dedicated gaming systems.
+
 ---
 
 ## How it works
@@ -125,11 +157,14 @@ Edit `config\settings.json` to enable or disable individual optimizations:
 
 ```
 gaming_optimization/
+├── GamingKioskProfile.ps1       ← Persistent kiosk profile deploy/rollback
 ├── GamingOptimizer.ps1          ← Main entry point / orchestrator
 ├── config/
 │   └── settings.json            ← User-tunable configuration
+│   └── kiosk.settings.json      ← Kiosk profile settings (Conservative/Aggressive)
 ├── launcher/
 │   └── Start-GamingOptimizer.cmd← UAC-elevating batch launcher
+│   └── Start-GamingKioskProfile.cmd ← Kiosk deploy/rollback launcher
 ├── modules/
 │   ├── ProtectedItems.psm1      ← Lists of protected services & processes
 │   ├── StateCapture.psm1        ← Snapshot & restore system state
@@ -152,6 +187,23 @@ gaming_optimization/
 
 Tests that require Administrator privileges or a live Windows environment
 are automatically skipped when run in CI or without elevation.
+
+---
+
+## Compatibility validation matrix (recommended after kiosk deploy)
+
+- Launchers/sign-in: Steam, Epic, Battle.net, EA App, Ubisoft Connect
+- Game Pass/Xbox app sign-in and install/update flow
+- Anti-cheat game checks: EAC, BattlEye, Riot Vanguard
+- Controller hot-plug, audio device switching, sleep/wake resume
+
+---
+
+## Operational model for daily use
+
+- Keep a scheduled patch window for Windows + launcher updates
+- Pin tested GPU/chipset driver versions and update deliberately
+- Use kiosk mode for daily play and rollback/maintenance mode for admin tasks
 
 ---
 

@@ -374,6 +374,28 @@ it 'config/settings.json contains AutoRestoreAtLogon key' {
     Assert-NotNull $json.AutoRestoreAtLogon
 }
 
+it 'config/kiosk.settings.json exists' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    Assert-True (Test-Path $cfg) 'kiosk.settings.json should exist'
+}
+
+it 'config/kiosk.settings.json is valid JSON' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json
+}
+
+it 'config/kiosk.settings.json contains Profile key' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.Profile
+}
+
+it 'GamingKioskProfile.ps1 exists' {
+    $scriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
+    Assert-True (Test-Path $scriptPath) 'GamingKioskProfile.ps1 should exist'
+}
+
 # ---------------------------------------------------------------------------
 # ── SUMMARY ───────────────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------

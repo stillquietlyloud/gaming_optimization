@@ -1,0 +1,104 @@
+{
+    "_comment": "Gaming kiosk deployment profile. Conservative is recommended first.",
+
+    "Profile": "Conservative",
+
+    "CreateRestorePoint": true,
+
+    "Launcher": {
+        "Type": "Playnite",
+        "_Type_help": "Playnite or Steam. If Path is set, that executable is used.",
+        "Path": "",
+        "Arguments": "",
+        "SetAsShell": false,
+        "ConfigureRunAtLogon": true
+    },
+
+    "AutoLogon": {
+        "Enabled": false,
+        "_Enabled_help": "Enable only for dedicated local gaming account.",
+        "_Security_warning": "AutoLogon stores credentials in plaintext in Winlogon registry values; only use on physically secured dedicated gaming systems.",
+        "UserName": "",
+        "Password": "",
+        "Domain": ""
+    },
+
+    "OptionalFeatures": {
+        "DisableStartupApps": true,
+        "DisableWidgets": true,
+        "DisableConsumerFeatures": true,
+        "DisableOneDrive": false,
+        "DisablePrintServicesIfUnused": false,
+        "DisableLocationServices": true,
+        "DisableDiagnosticServices": false,
+        "DisableRemoteRegistry": true,
+        "DisableFax": true,
+        "DisableRetailDemo": true,
+        "DisableTabletInput": false,
+        "DisableVbsAndHvci": false
+    },
+
+    "StartupDenyList": [
+        "OneDrive",
+        "Teams",
+        "Skype",
+        "Spotify",
+        "Discord",
+        "Update",
+        "Adobe"
+    ],
+
+    "PowerPlan": {
+        "Conservative": "HighPerformance",
+        "Aggressive": "UltimatePerformance"
+    },
+
+    "ServiceProfiles": {
+        "Conservative": [
+            "RemoteRegistry",
+            "Fax",
+            "RetailDemo"
+        ],
+        "Aggressive": [
+            "RemoteRegistry",
+            "Fax",
+            "RetailDemo",
+            "MapsBroker",
+            "lfsvc",
+            "WSearch",
+            "DiagTrack",
+            "dmwappushservice",
+            "WerSvc",
+            "wercplsupport",
+            "DPS",
+            "WdiSystemHost",
+            "WdiServiceHost",
+            "TabletInputService",
+            "PrintNotify",
+            "Spooler"
+        ]
+    },
+
+    "KeepServices": [
+        "Audiosrv",
+        "AudioEndpointBuilder",
+        "XboxGipSvc",
+        "XblAuthManager",
+        "XblGameSave",
+        "XboxNetApiSvc",
+        "GamingServices",
+        "WinDefend",
+        "wuauserv",
+        "UsoSvc",
+        "WaaSMedicSvc",
+        "BFE",
+        "mpssvc",
+        "Dhcp",
+        "Dnscache",
+        "NlaSvc",
+        "RpcSs",
+        "DcomLaunch",
+        "EventLog",
+        "PlugPlay"
+    ]
+}

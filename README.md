@@ -1,10 +1,12 @@
 # GamingOptimizer for Windows 11
 
-A one-command optimization pipeline for Windows 11 (25H1 / 25H2) that
-switches your system to a peak-gaming configuration, **automatically streams
-your gameplay to YouTube via OBS Studio**, and **restores your original
-settings at the next reboot / logon** — no permanent changes, no stability
-risks.
+A one-command optimization pipeline that turns a fresh Windows 11 Pro install
+into a **dedicated gaming console**. Run the script once and your system is
+permanently optimized for peak gaming performance, with optional automatic
+YouTube streaming via OBS Studio.
+
+This is designed for a dedicated gaming NVMe — optimizations are applied once
+and persist across reboots. There is no revert path by design.
 
 ---
 
@@ -20,11 +22,11 @@ risks.
 | **Visual FX** | Disables desktop animations & transparency |
 | **Network** | Disables Nagle algorithm; sets `NetworkThrottlingIndex` to unlimited |
 | **Memory** | Keeps kernel pages in RAM (`DisablePagingExecutive`) |
-| **Background services** | Temporarily stops SysMain, Windows Search, telemetry, etc. |
+| **Background services** | Stops SysMain, Windows Search, telemetry, etc. |
 | **Launcher priorities** | Raises Steam, Epic, Battle.net, EA App, etc. to AboveNormal |
 | **Fullscreen / GameDVR** | Disables Game DVR recording overhead; enables FSO |
 | **Game streaming** | Auto-detects game launch → starts OBS Studio → streams to YouTube; stops when the game exits |
-| **Auto-restore** | Registers a Scheduled Task to undo every change at next logon |
+| **Kiosk profile** | Full console experience: auto-logon, shell replacement, startup filtering |
 
 ### What is **never** touched
 
@@ -60,14 +62,11 @@ No hardware modifications (overclocking, voltage changes) are ever performed.
 # From an elevated PowerShell window:
 cd path\to\gaming_optimization
 
-# Apply all optimizations (captures state first)
+# Apply all optimizations (permanent)
 .\GamingOptimizer.ps1 -Mode Enable
 
 # Check current status
 .\GamingOptimizer.ps1 -Mode Status
-
-# Restore original settings now (without waiting for reboot)
-.\GamingOptimizer.ps1 -Mode Disable
 ```
 
 ### Option C — Game streaming mode
@@ -126,15 +125,29 @@ Key options include:
 ┌─────────────────────────────────────────────────────────────────┐
 │  GamingOptimizer.ps1  (orchestrator)                            │
 │                                                                 │
-│  Enable mode                     Disable mode (or at logon)     │
-│  ─────────────────                ────────────────────────────  │
-│  1. Save-SystemState  ──────────► 1. Disable-GamingOptimizations│
-│     (snapshot to JSON)            2. Stop-StreamingWatcher       │
-│  2. Enable-GamingOptimizations    3. Restore-SystemState        │
-│  3. Register-RestoreTask             (from JSON snapshot)        │
-│     (runs at next logon)          4. Remove-RestoreTask          │
-│  4. Start-StreamingWatcher        5. Delete snapshot file        │
-│     (if EnableStreaming=true)                                    │
+│  Enable mode (one-time, permanent)                              │
+│  ──────────────────────────────────                             │
+│  1. Enable-GamingOptimizations                                  │
+│     (registry tweaks, power plan, services, priorities)         │
+│  2. Start-StreamingWatcher                                      │
+│     (if EnableStreaming=true in config)                          │
+│                                                                 │
+│  Status mode                                                    │
+│  ───────────                                                    │
+│  Show current optimization state                                │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  GamingKioskProfile.ps1  (full console deployment)              │
+│                                                                 │
+│  Deploy mode                                                    │
+│  ───────────                                                    │
+│  1. Apply gaming defaults (Game Mode, DVR, FSO)                 │
+│  2. Set Ultimate Performance power plan                         │
+│  3. Disable startup noise (deny list, optional allow list)      │
+│  4. Apply Explorer policies (clean desktop UX)                  │
+│  5. Optional: auto-logon, shell replacement, service stops      │
+│  6. Optional: security tuning (VBS/HVCI disable)                │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -150,10 +163,8 @@ Key options include:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-State is saved to `%ProgramData%\GamingOptimizer\system_state.json`.
-The Scheduled Task (`GamingOptimizer_Restore`) runs as **SYSTEM** at the
-next logon and calls `GamingOptimizer.ps1 -Mode Disable -NoPrompt`,
-then removes itself.
+All optimizations are permanent — they persist across reboots.
+This is by design for a dedicated gaming console OS.
 
 ---
 
@@ -174,7 +185,6 @@ Edit `config\settings.json` to enable or disable individual optimizations:
   "FullscreenOptimizations":  true,   // Game DVR off, FSO on
   "PowerPlan":                "UltimatePerformance",
   "LogLevel":                 "Normal",   // Silent | Normal | Verbose
-  "AutoRestoreAtLogon":       true,   // Register startup restore task
   "EnableStreaming":          false,   // Enable OBS game-streaming automation
   "StreamingConfigPath":      ""      // Override path to streaming.json
 }

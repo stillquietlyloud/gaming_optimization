@@ -75,8 +75,9 @@ cd path\to\gaming_optimization
 
 ### Gaming kiosk profile deployment (persistent console setup)
 
-Use this when you want a console-like daily mode on Windows 11 Pro with a
-full rollback path.
+Use this when you want a permanent console-like daily mode on Windows 11 Pro
+installed on a dedicated NVMe drive. Optimizations are applied once and
+persist — there is no rollback path.
 
 ```powershell
 # Deploy with default DedicatedGaming profile (console-like mode)
@@ -84,9 +85,6 @@ full rollback path.
 
 # Show kiosk status
 .\GamingKioskProfile.ps1 -Mode Status
-
-# Roll everything back to captured defaults
-.\GamingKioskProfile.ps1 -Mode Rollback
 ```
 
 Configuration file:
@@ -158,18 +156,18 @@ Edit `config\settings.json` to enable or disable individual optimizations:
 
 ```
 gaming_optimization/
-├── GamingKioskProfile.ps1       ← Persistent kiosk profile deploy/rollback
+├── GamingKioskProfile.ps1       ← Persistent kiosk profile deploy
 ├── GamingOptimizer.ps1          ← Main entry point / orchestrator
 ├── config/
 │   └── settings.json            ← User-tunable configuration
 │   └── kiosk.settings.json      ← Kiosk profile settings (Conservative/Aggressive/DedicatedGaming)
 ├── launcher/
 │   └── Start-GamingOptimizer.cmd← UAC-elevating batch launcher
-│   └── Start-GamingKioskProfile.cmd ← Kiosk deploy/rollback launcher
+│   └── Start-GamingKioskProfile.cmd ← Kiosk deploy launcher
 ├── modules/
 │   ├── ProtectedItems.psm1      ← Lists of protected services & processes
-│   ├── StateCapture.psm1        ← Snapshot & restore system state
-│   └── Optimizations.psm1       ← Apply / revert all gaming tweaks
+│   ├── StateCapture.psm1        ← No-op stub (rollback permanently removed)
+│   └── Optimizations.psm1       ← Apply all gaming tweaks (permanent)
 └── tests/
     └── Invoke-Tests.ps1         ← Self-contained test suite
 ```
@@ -204,21 +202,18 @@ are automatically skipped when run in CI or without elevation.
 
 - Keep a scheduled patch window for Windows + launcher updates
 - Pin tested GPU/chipset driver versions and update deliberately
-- Use kiosk mode for daily play and rollback/maintenance mode for admin tasks
+- Use kiosk mode for daily play; administer via the desktop OS on the other NVMe
 
 ---
 
 ## Safety notes
 
-* **Reboot-safe**: every change is captured before it is made; the Scheduled
-  Task reverts everything at the next logon even if you forget to run
-  `-Mode Disable`.
+* **Permanent optimizations**: changes are applied once and persist across
+  reboots. This OS is a dedicated game console — there is no revert path.
 * **No hardware changes**: no overclocking, no voltage tweaks, no firmware
   interaction.
 * **Anti-cheat friendly**: Defender, secure-boot, kernel integrity, and all
   anti-cheat services remain untouched.
-* **Idempotent disable**: running `-Mode Disable` when no state file exists
-  still safely reverts known registry tweaks.
 
 ---
 

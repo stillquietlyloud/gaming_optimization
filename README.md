@@ -79,7 +79,7 @@ Use this when you want a console-like daily mode on Windows 11 Pro with a
 full rollback path.
 
 ```powershell
-# Deploy with default Conservative profile
+# Deploy with default DedicatedGaming profile (console-like mode)
 .\GamingKioskProfile.ps1 -Mode Deploy
 
 # Show kiosk status
@@ -94,11 +94,12 @@ Configuration file:
 `config\kiosk.settings.json`
 
 Key options include:
-- `Profile`: `Conservative` or `Aggressive`
+- `Profile`: `Conservative`, `Aggressive`, or `DedicatedGaming`
 - Launcher setup (`Playnite` fullscreen or `Steam` Big Picture)
 - Optional auto-logon for a dedicated gaming account
 - Optional shell replacement for full console UX
 - Configurable startup deny list (`StartupDenyList`) for noisy background apps
+- Optional startup allow list (`StartupAllowList`) + `EnforceGamingOnlyStartup` for gaming-only boot entries
 - Conditional low-risk service toggles (print/location/diagnostics/etc.)
 - Optional VBS/HVCI disable (only when validated for your game/anti-cheat set)
 
@@ -161,7 +162,7 @@ gaming_optimization/
 ├── GamingOptimizer.ps1          ← Main entry point / orchestrator
 ├── config/
 │   └── settings.json            ← User-tunable configuration
-│   └── kiosk.settings.json      ← Kiosk profile settings (Conservative/Aggressive)
+│   └── kiosk.settings.json      ← Kiosk profile settings (Conservative/Aggressive/DedicatedGaming)
 ├── launcher/
 │   └── Start-GamingOptimizer.cmd← UAC-elevating batch launcher
 │   └── Start-GamingKioskProfile.cmd ← Kiosk deploy/rollback launcher

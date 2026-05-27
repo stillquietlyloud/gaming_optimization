@@ -391,6 +391,19 @@ it 'config/kiosk.settings.json contains Profile key' {
     Assert-NotNull $json.Profile
 }
 
+it 'config/kiosk.settings.json supports DedicatedGaming profile' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.ServiceProfiles.DedicatedGaming
+    Assert-NotNull $json.PowerPlan.DedicatedGaming
+}
+
+it 'config/kiosk.settings.json contains StartupAllowList for gaming-only mode' {
+    $cfg = Join-Path $RepoRoot 'config\kiosk.settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-True ($json.StartupAllowList.Count -gt 0) 'StartupAllowList should include launcher/anti-cheat patterns'
+}
+
 it 'GamingKioskProfile.ps1 exists' {
     $scriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
     Assert-True (Test-Path $scriptPath) 'GamingKioskProfile.ps1 should exist'

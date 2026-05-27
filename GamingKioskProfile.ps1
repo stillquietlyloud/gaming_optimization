@@ -47,7 +47,7 @@ $UltimatePerfGuid = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
 $HighPerfGuid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 
 $Defaults = @{
-    Profile = 'Conservative'
+    Profile = 'DedicatedGaming'
     CreateRestorePoint = $true
     Launcher = @{
         Type = 'Playnite'
@@ -64,6 +64,7 @@ $Defaults = @{
     }
     OptionalFeatures = @{
         DisableStartupApps = $true
+        EnforceGamingOnlyStartup = $false
         DisableWidgets = $true
         DisableConsumerFeatures = $true
         DisableOneDrive = $false
@@ -77,9 +78,34 @@ $Defaults = @{
         DisableVbsAndHvci = $false
     }
     StartupDenyList = @('OneDrive','Teams','Skype','Spotify','Discord','Update','Adobe')
+    StartupAllowList = @(
+        'Steam',
+        'Epic',
+        'EpicGamesLauncher',
+        'EpicWebHelper',
+        'EADesktop',
+        'EABackgroundService',
+        'EA',
+        'Ubisoft',
+        'Uplay',
+        'EasyAntiCheat',
+        'BattlEye',
+        'BEService',
+        'vgc',
+        'vgtray',
+        'GameGuard',
+        'RiotClient',
+        'Riot Vanguard'
+    )
     ServiceProfiles = @{
         Conservative = @('RemoteRegistry', 'Fax', 'RetailDemo')
         Aggressive = @(
+            'RemoteRegistry', 'Fax', 'RetailDemo', 'MapsBroker', 'lfsvc',
+            'WSearch', 'DiagTrack', 'dmwappushservice', 'WerSvc',
+            'wercplsupport', 'DPS', 'WdiSystemHost', 'WdiServiceHost',
+            'TabletInputService', 'PrintNotify', 'Spooler'
+        )
+        DedicatedGaming = @(
             'RemoteRegistry', 'Fax', 'RetailDemo', 'MapsBroker', 'lfsvc',
             'WSearch', 'DiagTrack', 'dmwappushservice', 'WerSvc',
             'wercplsupport', 'DPS', 'WdiSystemHost', 'WdiServiceHost',
@@ -95,6 +121,7 @@ $Defaults = @{
     PowerPlan = @{
         Conservative = 'HighPerformance'
         Aggressive = 'UltimatePerformance'
+        DedicatedGaming = 'UltimatePerformance'
     }
 }
 
@@ -173,9 +200,15 @@ function Read-Config {
         $cfg = Merge-Hashtable -Base $cfg -Override $raw
     }
 
-    $validProfiles = @('Conservative','Aggressive')
+    $validProfiles = @('Conservative','Aggressive','DedicatedGaming')
     if ($validProfiles -notcontains $cfg.Profile) {
-        throw "Invalid profile '$($cfg.Profile)'. Use Conservative or Aggressive."
+        throw "Invalid profile '$($cfg.Profile)'. Use Conservative, Aggressive, or DedicatedGaming."
+    }
+    if (-not $cfg.ServiceProfiles.ContainsKey($cfg.Profile)) {
+        throw "ServiceProfiles is missing profile '$($cfg.Profile)'."
+    }
+    if (-not $cfg.PowerPlan.ContainsKey($cfg.Profile)) {
+        throw "PowerPlan is missing profile '$($cfg.Profile)'."
     }
     return $cfg
 }
@@ -340,18 +373,43 @@ function Disable-StartupNoise {
     if (-not $Config.OptionalFeatures.DisableStartupApps) { return }
 
     $denyList = @($Config.StartupDenyList)
-    if ($denyList.Count -eq 0) { return }
+    $allowList = @($Config.StartupAllowList)
+    $enforceGamingOnly = [bool]$Config.OptionalFeatures.EnforceGamingOnlyStartup
+
+    $denyList = @($denyList | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $allowList = @($allowList | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+
+    if ($denyList.Count -eq 0 -and (-not $enforceGamingOnly -or $allowList.Count -eq 0)) { return }
+
     foreach ($hive in @('HKCU','HKLM')) {
         $path = "${hive}:\Software\Microsoft\Windows\CurrentVersion\Run"
         $props = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
         if (-not $props) { continue }
         foreach ($prop in $props.PSObject.Properties) {
             if ($prop.Name -match '^PS') { continue }
-            foreach ($pattern in $denyList) {
-                if ($prop.Name -like "*$pattern*" -or ([string]$prop.Value) -like "*$pattern*") {
+
+            if ($enforceGamingOnly -and $allowList.Count -gt 0) {
+                if ($prop.Name -ieq $RunValueName) { continue }
+
+                $isAllowed = $false
+                foreach ($pattern in $allowList) {
+                    if ($prop.Name -like "*$pattern*" -or ([string]$prop.Value) -like "*$pattern*") {
+                        $isAllowed = $true
+                        break
+                    }
+                }
+
+                if (-not $isAllowed) {
                     Remove-ItemProperty -Path $path -Name $prop.Name -ErrorAction SilentlyContinue
-                    Write-Log "Removed startup entry: $hive/$($prop.Name)"
-                    break
+                    Write-Log "Removed non-gaming startup entry: $hive/$($prop.Name)"
+                }
+            } else {
+                foreach ($pattern in $denyList) {
+                    if ($prop.Name -like "*$pattern*" -or ([string]$prop.Value) -like "*$pattern*") {
+                        Remove-ItemProperty -Path $path -Name $prop.Name -ErrorAction SilentlyContinue
+                        Write-Log "Removed startup entry: $hive/$($prop.Name)"
+                        break
+                    }
                 }
             }
         }

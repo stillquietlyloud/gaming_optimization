@@ -1,7 +1,7 @@
 {
-    "_comment": "Gaming kiosk deployment profile. Conservative is recommended first.",
+    "_comment": "Gaming kiosk deployment profile. DedicatedGaming is tuned for gaming-only systems.",
 
-    "Profile": "Conservative",
+    "Profile": "DedicatedGaming",
 
     "CreateRestorePoint": true,
 
@@ -25,6 +25,7 @@
 
     "OptionalFeatures": {
         "DisableStartupApps": true,
+        "EnforceGamingOnlyStartup": true,
         "DisableWidgets": true,
         "DisableConsumerFeatures": true,
         "DisableOneDrive": false,
@@ -48,9 +49,30 @@
         "Adobe"
     ],
 
+    "StartupAllowList": [
+        "Steam",
+        "Epic",
+        "EpicGamesLauncher",
+        "EpicWebHelper",
+        "EADesktop",
+        "EABackgroundService",
+        "EA",
+        "Ubisoft",
+        "Uplay",
+        "EasyAntiCheat",
+        "BattlEye",
+        "BEService",
+        "vgc",
+        "vgtray",
+        "GameGuard",
+        "RiotClient",
+        "Riot Vanguard"
+    ],
+
     "PowerPlan": {
         "Conservative": "HighPerformance",
-        "Aggressive": "UltimatePerformance"
+        "Aggressive": "UltimatePerformance",
+        "DedicatedGaming": "UltimatePerformance"
     },
 
     "ServiceProfiles": {
@@ -60,6 +82,24 @@
             "RetailDemo"
         ],
         "Aggressive": [
+            "RemoteRegistry",
+            "Fax",
+            "RetailDemo",
+            "MapsBroker",
+            "lfsvc",
+            "WSearch",
+            "DiagTrack",
+            "dmwappushservice",
+            "WerSvc",
+            "wercplsupport",
+            "DPS",
+            "WdiSystemHost",
+            "WdiServiceHost",
+            "TabletInputService",
+            "PrintNotify",
+            "Spooler"
+        ],
+        "DedicatedGaming": [
             "RemoteRegistry",
             "Fax",
             "RetailDemo",

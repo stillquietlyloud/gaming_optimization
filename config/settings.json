@@ -34,8 +34,8 @@
     "LogLevel": "Normal",
     "_LogLevel_help": "Verbosity: 'Silent', 'Normal', or 'Verbose'.",
 
-    "AutoRestoreAtLogon": true,
-    "_AutoRestoreAtLogon_help": "Register a Scheduled Task to automatically restore the original state at the next logon/reboot.",
+    "AutoRestoreAtLogon": false,
+    "_AutoRestoreAtLogon_help": "Disabled: this system is a permanent gaming console. Restore is not available.",
 
     "StateFileDir": "",
     "_StateFileDir_help": "Override directory for the state snapshot file. Leave empty to use %ProgramData%\\GamingOptimizer."

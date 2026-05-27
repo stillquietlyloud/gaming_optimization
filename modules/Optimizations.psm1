@@ -106,12 +106,6 @@ function Enable-GameMode {
     Write-RegValue 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
 }
 
-function Disable-GameMode {
-    Write-Verbose '[Optimizations] Disabling Windows Game Mode…'
-    Write-RegValue 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode'   0
-    Write-RegValue 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 0
-}
-
 # ---------------------------------------------------------------------------
 # VISUAL EFFECTS
 # ---------------------------------------------------------------------------
@@ -131,16 +125,6 @@ function Disable-VisualEffects {
     # Disable transparency effects
     Write-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' `
         'EnableTransparency' 0
-}
-
-function Enable-VisualEffects {
-    Write-Verbose '[Optimizations] Restoring default visual effects…'
-    Write-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
-        'VisualFXSetting' 0
-    Write-RegValue 'HKCU:\Control Panel\Desktop' 'MenuShowDelay' '400' -Type String
-    Write-RegValue 'HKCU:\Control Panel\Desktop\WindowMetrics' 'MinAnimate' '1' -Type String
-    Write-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' `
-        'EnableTransparency' 1
 }
 
 # ---------------------------------------------------------------------------
@@ -179,27 +163,6 @@ function Enable-NetworkOptimizations {
     }
 }
 
-function Disable-NetworkOptimizations {
-    Write-Verbose '[Optimizations] Reverting network tweaks…'
-
-    Write-RegValue `
-        'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
-        'NetworkThrottlingIndex' 10   # Windows default
-
-    Write-RegValue `
-        'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
-        'SystemResponsiveness' 20    # Windows default
-
-    try {
-        $interfaces = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces'
-        foreach ($iface in $interfaces) {
-            Remove-ItemProperty -Path $iface.PSPath -Name 'TcpAckFrequency' -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $iface.PSPath -Name 'TCPNoDelay'      -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $iface.PSPath -Name 'TcpDelAckTicks'  -ErrorAction SilentlyContinue
-        }
-    } catch {}
-}
-
 # ---------------------------------------------------------------------------
 # MMCSS (Multimedia Class Scheduler) PROFILES FOR GAMES
 # ---------------------------------------------------------------------------
@@ -215,26 +178,12 @@ function Enable-MmcssGamingProfile {
     Write-RegValue $base 'SFIO Priority'       'High' -Type String
 }
 
-function Disable-MmcssGamingProfile {
-    Write-Verbose '[Optimizations] Reverting MMCSS Games profile…'
-    $base = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games'
-    Write-RegValue $base 'GPU Priority'        2
-    Write-RegValue $base 'Priority'            2
-    Write-RegValue $base 'Scheduling Category' 'Medium' -Type String
-    Write-RegValue $base 'SFIO Priority'       'Normal'  -Type String
-}
-
 # ---------------------------------------------------------------------------
 # HARDWARE-ACCELERATED GPU SCHEDULING (HAGS)
 # ---------------------------------------------------------------------------
 function Enable-HAGS {
     Write-Verbose '[Optimizations] Enabling HAGS (Hardware-Accelerated GPU Scheduling)…'
     Write-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' 2
-}
-
-function Disable-HAGS {
-    Write-Verbose '[Optimizations] Disabling HAGS…'
-    Write-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' 1
 }
 
 # ---------------------------------------------------------------------------
@@ -244,12 +193,6 @@ function Disable-PowerThrottling {
     Write-Verbose '[Optimizations] Disabling Power Throttling…'
     $path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
     Write-RegValue $path 'PowerThrottlingOff' 1
-}
-
-function Enable-PowerThrottling {
-    Write-Verbose '[Optimizations] Enabling Power Throttling…'
-    $path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
-    Write-RegValue $path 'PowerThrottlingOff' 0
 }
 
 # ---------------------------------------------------------------------------
@@ -264,13 +207,6 @@ function Enable-MemoryOptimizations {
     Write-RegValue $mm 'LargeSystemCache'        0
 }
 
-function Disable-MemoryOptimizations {
-    Write-Verbose '[Optimizations] Reverting memory optimizations…'
-    $mm = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
-    Write-RegValue $mm 'DisablePagingExecutive' 0
-    Write-RegValue $mm 'LargeSystemCache'        0
-}
-
 # ---------------------------------------------------------------------------
 # FULLSCREEN OPTIMIZATIONS / GAME DVR
 # ---------------------------------------------------------------------------
@@ -282,16 +218,6 @@ function Enable-FullscreenOptimizations {
     Write-RegValue $gc 'GameDVR_FSEBehaviorMode'              2
     Write-RegValue $gc 'GameDVR_HonorUserFSEBehaviorMode'     1
     Write-RegValue $gc 'GameDVR_DXGIHonorFSEWindowsCompatible' 1
-    Write-RegValue $gc 'GameDVR_EFSEFeatureFlags'             0
-}
-
-function Disable-FullscreenOptimizations {
-    Write-Verbose '[Optimizations] Restoring Fullscreen Optimizations defaults…'
-    $gc = 'HKCU:\System\GameConfigStore'
-    Write-RegValue $gc 'GameDVR_Enabled'                      1
-    Write-RegValue $gc 'GameDVR_FSEBehaviorMode'              0
-    Write-RegValue $gc 'GameDVR_HonorUserFSEBehaviorMode'     0
-    Write-RegValue $gc 'GameDVR_DXGIHonorFSEWindowsCompatible' 0
     Write-RegValue $gc 'GameDVR_EFSEFeatureFlags'             0
 }
 
@@ -347,18 +273,6 @@ function Set-LauncherPriorities {
     }
 }
 
-function Reset-LauncherPriorities {
-    Write-Verbose '[Optimizations] Resetting game launcher process priorities to Normal…'
-    foreach ($procName in $Script:LauncherProcessBoosts) {
-        Get-Process -Name $procName -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                try {
-                    $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Normal
-                } catch {}
-            }
-    }
-}
-
 # ---------------------------------------------------------------------------
 # PUBLIC: Enable-GamingOptimizations
 # ---------------------------------------------------------------------------
@@ -366,7 +280,6 @@ function Enable-GamingOptimizations {
     <#
     .SYNOPSIS
         Applies all gaming performance optimizations.
-        Call Save-SystemState (from StateCapture.psm1) BEFORE this function.
     #>
     Write-Host '[GamingOptimizer] Applying optimizations…' -ForegroundColor Cyan
 
@@ -386,32 +299,5 @@ function Enable-GamingOptimizations {
         -ForegroundColor Green
 }
 
-# ---------------------------------------------------------------------------
-# PUBLIC: Disable-GamingOptimizations
-# ---------------------------------------------------------------------------
-function Disable-GamingOptimizations {
-    <#
-    .SYNOPSIS
-        Reverts all gaming-specific tweaks applied by Enable-GamingOptimizations.
-        Called automatically at the next logon via the Scheduled Task, or manually.
-    #>
-    Write-Host '[GamingOptimizer] Reverting optimizations…' -ForegroundColor Cyan
-
-    Disable-GameMode
-    Enable-VisualEffects
-    Disable-NetworkOptimizations
-    Disable-MmcssGamingProfile
-    Disable-HAGS
-    Enable-PowerThrottling
-    Disable-MemoryOptimizations
-    Disable-FullscreenOptimizations
-    Reset-LauncherPriorities
-    # Services are restored by Restore-SystemState in StateCapture.psm1
-    # Power plan is restored by Restore-SystemState in StateCapture.psm1
-
-    Write-Host '[GamingOptimizer] Optimizations reverted.' -ForegroundColor Green
-}
-
 Export-ModuleMember -Function `
-    Enable-GamingOptimizations, `
-    Disable-GamingOptimizations
+    Enable-GamingOptimizations

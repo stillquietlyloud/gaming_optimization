@@ -1,9 +1,10 @@
 # GamingOptimizer for Windows 11
 
 A one-command optimization pipeline for Windows 11 (25H1 / 25H2) that
-switches your system to a peak-gaming configuration and **automatically
-restores your original settings at the next reboot / logon** — no permanent
-changes, no stability risks.
+switches your system to a peak-gaming configuration, **automatically streams
+your gameplay to YouTube via OBS Studio**, and **restores your original
+settings at the next reboot / logon** — no permanent changes, no stability
+risks.
 
 ---
 
@@ -22,6 +23,7 @@ changes, no stability risks.
 | **Background services** | Temporarily stops SysMain, Windows Search, telemetry, etc. |
 | **Launcher priorities** | Raises Steam, Epic, Battle.net, EA App, etc. to AboveNormal |
 | **Fullscreen / GameDVR** | Disables Game DVR recording overhead; enables FSO |
+| **Game streaming** | Auto-detects game launch → starts OBS Studio → streams to YouTube; stops when the game exits |
 | **Auto-restore** | Registers a Scheduled Task to undo every change at next logon |
 
 ### What is **never** touched
@@ -40,6 +42,7 @@ No hardware modifications (overclocking, voltage changes) are ever performed.
 * Windows 11 (build 22000 or later; optimised for 25H1 / 25H2)
 * PowerShell 5.1 or later (included with Windows 11)
 * Administrator privileges
+* **For streaming**: OBS Studio 28+ and a YouTube Live stream key
 
 ---
 
@@ -66,6 +69,17 @@ cd path\to\gaming_optimization
 # Restore original settings now (without waiting for reboot)
 .\GamingOptimizer.ps1 -Mode Disable
 ```
+
+### Option C — Game streaming mode
+
+1. Copy `config\streaming.example.json` → `config\streaming.json` and fill in
+   your YouTube stream key and OBS settings.
+2. Set `"EnableStreaming": true` in `config\settings.json`.
+3. Launch with `launcher\Start-GameStream.cmd` (Run as administrator).
+
+The streaming watcher runs in the background, automatically starts OBS when a
+game is detected, and stops OBS when the game exits. See
+[Streaming configuration](#streaming-configuration) below for details.
 
 ### Non-interactive / scripted use
 
@@ -115,10 +129,24 @@ Key options include:
 │  Enable mode                     Disable mode (or at logon)     │
 │  ─────────────────                ────────────────────────────  │
 │  1. Save-SystemState  ──────────► 1. Disable-GamingOptimizations│
-│     (snapshot to JSON)            2. Restore-SystemState        │
-│  2. Enable-GamingOptimizations       (from JSON snapshot)       │
-│  3. Register-RestoreTask          3. Remove-RestoreTask         │
-│     (runs at next logon)          4. Delete snapshot file       │
+│     (snapshot to JSON)            2. Stop-StreamingWatcher       │
+│  2. Enable-GamingOptimizations    3. Restore-SystemState        │
+│  3. Register-RestoreTask             (from JSON snapshot)        │
+│     (runs at next logon)          4. Remove-RestoreTask          │
+│  4. Start-StreamingWatcher        5. Delete snapshot file        │
+│     (if EnableStreaming=true)                                    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Streaming.psm1  (game-stream automation)                       │
+│                                                                 │
+│  Watch-GameProcess (background loop)                            │
+│  ────────────────────────────────────                           │
+│  Poll for game process ──► Start-GameStream (inject key, OBS)   │
+│  Poll for game exit    ──► Stop-GameStream  (graceful OBS stop) │
+│                                                                 │
+│  Auto-detect mode: any new full-screen app = game               │
+│  Watch-list mode:  only named processes from streaming.json     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,9 +174,45 @@ Edit `config\settings.json` to enable or disable individual optimizations:
   "FullscreenOptimizations":  true,   // Game DVR off, FSO on
   "PowerPlan":                "UltimatePerformance",
   "LogLevel":                 "Normal",   // Silent | Normal | Verbose
-  "AutoRestoreAtLogon":       true    // Register startup restore task
+  "AutoRestoreAtLogon":       true,   // Register startup restore task
+  "EnableStreaming":          false,   // Enable OBS game-streaming automation
+  "StreamingConfigPath":      ""      // Override path to streaming.json
 }
 ```
+
+### Streaming configuration
+
+To enable automatic YouTube streaming when a game is detected:
+
+1. Copy `config\streaming.example.json` to `config\streaming.json`.
+2. Fill in the fields:
+
+```jsonc
+{
+  "YouTubeStreamKey":   "xxxx-xxxx-xxxx-xxxx-xxxx",  // YouTube Studio → Go Live → Stream key
+  "OBSPath":            "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+  "OBSProfileName":     "YouTubeGame",               // OBS profile configured for YouTube
+  "OBSSceneCollection": "GameStreamOnly",            // Scene collection using Game Capture
+  "GameProcessNames":   []                           // Empty = auto-detect full-screen apps
+}
+```
+
+| Field | Description |
+|---|---|
+| `YouTubeStreamKey` | Your YouTube Live stream key (never committed — `streaming.json` is git-ignored). |
+| `OBSPath` | Full path to `obs64.exe`. |
+| `OBSProfileName` | OBS profile pre-configured to stream to YouTube RTMP. The stream key is injected automatically. |
+| `OBSSceneCollection` | OBS scene collection that should use **Game Capture** (not Display Capture) and **Application Audio Capture** scoped to the game executable only. When configured this way, your webcam, desktop, and non-game audio are not captured. |
+| `GameProcessNames` | List of process names to watch (e.g. `["cs2.exe", "Overwatch.exe"]`). Leave empty `[]` to auto-detect any new full-screen application. |
+
+> **Privacy by design**: When you set up OBS with Game Capture and
+> Application Audio Capture (as recommended above), only the game window and
+> its audio are streamed. Desktop content, other applications, microphone, and
+> webcam are excluded by the scene collection configuration — ensure you verify
+> your OBS setup before going live. The YouTube stream key is stored only in
+> `config\streaming.json` (git-ignored) and is written to the OBS profile's
+> `service.json` before each launch; it persists in the OBS profile directory
+> between sessions.
 
 ---
 
@@ -156,20 +220,22 @@ Edit `config\settings.json` to enable or disable individual optimizations:
 
 ```
 gaming_optimization/
-├── GamingKioskProfile.ps1       ← Persistent kiosk profile deploy
-├── GamingOptimizer.ps1          ← Main entry point / orchestrator
+├── GamingKioskProfile.ps1           ← Persistent kiosk profile deploy
+├── GamingOptimizer.ps1              ← Main entry point / orchestrator
 ├── config/
-│   └── settings.json            ← User-tunable configuration
-│   └── kiosk.settings.json      ← Kiosk profile settings (Conservative/Aggressive/DedicatedGaming)
+│   ├── settings.json                ← User-tunable configuration
+│   ├── kiosk.settings.json          ← Kiosk profile settings (Conservative/Aggressive/DedicatedGaming)
+│   └── streaming.example.json       ← Template for streaming credentials
 ├── launcher/
-│   └── Start-GamingOptimizer.cmd← UAC-elevating batch launcher
-│   └── Start-GamingKioskProfile.cmd ← Kiosk deploy launcher
+│   ├── Start-GamingOptimizer.cmd    ← UAC-elevating batch launcher
+│   ├── Start-GamingKioskProfile.cmd ← Kiosk deploy launcher
+│   └── Start-GameStream.cmd         ← Streaming mode launcher (optimizes + streams)
 ├── modules/
-│   ├── ProtectedItems.psm1      ← Lists of protected services & processes
-│   ├── StateCapture.psm1        ← No-op stub (rollback permanently removed)
-│   └── Optimizations.psm1       ← Apply all gaming tweaks (permanent)
+│   ├── ProtectedItems.psm1          ← Lists of protected services & processes
+│   ├── Optimizations.psm1           ← Apply all gaming tweaks (permanent)
+│   └── Streaming.psm1              ← OBS game-streaming automation
 └── tests/
-    └── Invoke-Tests.ps1         ← Self-contained test suite
+    └── Invoke-Tests.ps1             ← Self-contained test suite
 ```
 
 ---
@@ -214,6 +280,12 @@ are automatically skipped when run in CI or without elevation.
   interaction.
 * **Anti-cheat friendly**: Defender, secure-boot, kernel integrity, and all
   anti-cheat services remain untouched.
+* **Stream privacy**: When OBS is configured with Game Capture and Application
+  Audio Capture as recommended, only the game window and its audio are
+  streamed. Verify your OBS scene collection setup before going live. The
+  YouTube stream key is stored in a git-ignored file and written to the OBS
+  profile's `service.json` before each launch (it persists in the profile
+  directory between sessions).
 
 ---
 

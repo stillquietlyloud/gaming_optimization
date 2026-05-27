@@ -257,10 +257,11 @@ it 'config/settings.json contains EnableHAGS key' {
     Assert-NotNull $json.EnableHAGS
 }
 
-it 'config/settings.json AutoRestoreAtLogon is false (rollback permanently disabled)' {
+it 'config/settings.json does not contain dead AutoRestoreAtLogon key' {
     $cfg  = Join-Path $RepoRoot 'config\settings.json'
     $json = Get-Content $cfg -Raw | ConvertFrom-Json
-    Assert-True ($json.AutoRestoreAtLogon -eq $false) 'AutoRestoreAtLogon must be false on a console OS'
+    Assert-True ($null -eq $json.PSObject.Properties['AutoRestoreAtLogon']) `
+        'AutoRestoreAtLogon should be removed (rollback permanently disabled)'
 }
 
 it 'config/kiosk.settings.json exists' {
@@ -308,6 +309,207 @@ it 'config/kiosk.settings.json enables gaming-only startup mode by default' {
 it 'GamingKioskProfile.ps1 exists' {
     $scriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
     Assert-True (Test-Path $scriptPath) 'GamingKioskProfile.ps1 should exist'
+}
+
+it 'config/settings.json contains EnableStreaming key' {
+    $cfg  = Join-Path $RepoRoot 'config\settings.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull ($json.PSObject.Properties['EnableStreaming']) 'EnableStreaming key should exist in settings.json'
+}
+
+it 'config/streaming.example.json exists' {
+    $cfg = Join-Path $RepoRoot 'config\streaming.example.json'
+    Assert-True (Test-Path $cfg) 'streaming.example.json should exist'
+}
+
+it 'config/streaming.example.json is valid JSON' {
+    $cfg  = Join-Path $RepoRoot 'config\streaming.example.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json
+}
+
+it 'config/streaming.example.json contains YouTubeStreamKey key' {
+    $cfg  = Join-Path $RepoRoot 'config\streaming.example.json'
+    $json = Get-Content $cfg -Raw | ConvertFrom-Json
+    Assert-NotNull $json.YouTubeStreamKey
+}
+
+it 'config/streaming.json is not tracked in git (git-ignored)' {
+    $gitignore = Join-Path $RepoRoot '.gitignore'
+    Assert-True (Test-Path $gitignore) '.gitignore should exist'
+    $content = Get-Content $gitignore -Raw
+    Assert-True ($content -match 'streaming\.json') '.gitignore should exclude streaming.json'
+}
+
+# ---------------------------------------------------------------------------
+# ── MODULE 4: Streaming ───────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+Write-Host ''
+Write-Host '━━━ Streaming module ━━━' -ForegroundColor Cyan
+
+Import-Module (Join-Path $ModulesDir 'Streaming.psm1') -Force
+
+it 'Streaming module exports Read-StreamingConfig' {
+    Assert-NotNull (Get-Command Read-StreamingConfig -ErrorAction SilentlyContinue) `
+        'Read-StreamingConfig should be exported'
+}
+
+it 'Streaming module exports Start-GameStream' {
+    Assert-NotNull (Get-Command Start-GameStream -ErrorAction SilentlyContinue) `
+        'Start-GameStream should be exported'
+}
+
+it 'Streaming module exports Stop-GameStream' {
+    Assert-NotNull (Get-Command Stop-GameStream -ErrorAction SilentlyContinue) `
+        'Stop-GameStream should be exported'
+}
+
+it 'Streaming module exports Watch-GameProcess' {
+    Assert-NotNull (Get-Command Watch-GameProcess -ErrorAction SilentlyContinue) `
+        'Watch-GameProcess should be exported'
+}
+
+it 'Streaming module exports Start-StreamingWatcher' {
+    Assert-NotNull (Get-Command Start-StreamingWatcher -ErrorAction SilentlyContinue) `
+        'Start-StreamingWatcher should be exported'
+}
+
+it 'Streaming module exports Stop-StreamingWatcher' {
+    Assert-NotNull (Get-Command Stop-StreamingWatcher -ErrorAction SilentlyContinue) `
+        'Stop-StreamingWatcher should be exported'
+}
+
+it 'Read-StreamingConfig throws when config file does not exist' {
+    $threw = $false
+    try {
+        Read-StreamingConfig -ConfigPath 'C:\nonexistent\streaming.json'
+    } catch {
+        $threw = $true
+    }
+    Assert-True $threw 'Read-StreamingConfig should throw for a missing file'
+}
+
+it 'Read-StreamingConfig throws when YouTubeStreamKey is the placeholder' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = 'xxxx-xxxx-xxxx-xxxx-xxxx'
+            OBSPath          = 'C:\Program Files\obs-studio\bin\64bit\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw for placeholder stream key'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Read-StreamingConfig throws when YouTubeStreamKey is empty' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = ''
+            OBSPath          = 'C:\obs\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw for empty stream key'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Read-StreamingConfig throws when OBSPath does not exist on disk' {
+    $tmpFile = [System.IO.Path]::GetTempFileName()
+    try {
+        @{
+            YouTubeStreamKey = 'real-key-value'
+            OBSPath          = 'C:\nonexistent\obs64.exe'
+        } | ConvertTo-Json | Set-Content -Path $tmpFile -Encoding UTF8
+        $threw = $false
+        try {
+            Read-StreamingConfig -ConfigPath $tmpFile
+        } catch {
+            $threw = $true
+        }
+        Assert-True $threw 'Read-StreamingConfig should throw when OBS exe is not found'
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+it 'Stop-GameStream does not throw when OBS is not running' {
+    # OBS is not installed in the test environment; function should exit cleanly.
+    Stop-GameStream
+}
+
+# ---------------------------------------------------------------------------
+# ── GAMING KIOSK PROFILE BEHAVIORAL TESTS ─────────────────────────────────
+# ---------------------------------------------------------------------------
+
+# Extract helper functions from the kiosk script for unit testing.
+# We parse the script AST to avoid executing the top-level param/main logic.
+$kioskScriptPath = Join-Path $RepoRoot 'GamingKioskProfile.ps1'
+$kioskAst = [System.Management.Automation.Language.Parser]::ParseFile($kioskScriptPath, [ref]$null, [ref]$null)
+$kioskFunctions = $kioskAst.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
+
+# Define kiosk-level variables needed by the extracted functions
+$UltimatePerfGuid = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+$HighPerfGuid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+
+foreach ($fn in $kioskFunctions) {
+    if ($fn.Name -in @('Merge-Hashtable', 'ConvertFrom-PSObjectToHashtable', 'Resolve-PowerPlanGuid')) {
+        . ([ScriptBlock]::Create($fn.Extent.Text))
+    }
+}
+
+it 'Resolve-PowerPlanGuid returns correct GUID for UltimatePerformance' {
+    $result = Resolve-PowerPlanGuid -Name 'UltimatePerformance'
+    Assert-True ($result -eq 'e9a42b02-d5df-448d-aa00-03f14749eb61') `
+        "Expected UltimatePerformance GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid returns correct GUID for HighPerformance' {
+    $result = Resolve-PowerPlanGuid -Name 'HighPerformance'
+    Assert-True ($result -eq '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c') `
+        "Expected HighPerformance GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid passes through a raw GUID string' {
+    $customGuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    $result = Resolve-PowerPlanGuid -Name $customGuid
+    Assert-True ($result -eq $customGuid) `
+        "Expected passthrough of custom GUID, got: $result"
+}
+
+it 'Resolve-PowerPlanGuid throws for invalid plan name' {
+    $threw = $false
+    try { Resolve-PowerPlanGuid -Name 'NotARealPlan' } catch { $threw = $true }
+    Assert-True $threw 'Should throw for unsupported power plan name'
+}
+
+it 'Merge-Hashtable deep-merges nested keys' {
+    $base = @{ a = @{ x = 1; y = 2 }; b = 'keep' }
+    $override = @{ a = @{ y = 99; z = 3 } }
+    $result = Merge-Hashtable -Base $base -Override $override
+    Assert-True ($result.a.x -eq 1) 'Base key a.x should be preserved'
+    Assert-True ($result.a.y -eq 99) 'Override key a.y should replace base'
+    Assert-True ($result.a.z -eq 3) 'New key a.z should be added'
+    Assert-True ($result.b -eq 'keep') 'Unrelated key b should be preserved'
+}
+
+it 'Merge-Hashtable returns base when override is null' {
+    $base = @{ a = 1 }
+    $result = Merge-Hashtable -Base $base -Override $null
+    Assert-True ($result.a -eq 1) 'Base should be returned unchanged'
 }
 
 # ---------------------------------------------------------------------------

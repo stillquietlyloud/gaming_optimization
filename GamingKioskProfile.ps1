@@ -1,18 +1,18 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Deploys or rolls back a Windows 11 gaming kiosk profile.
+    Deploys a permanent Windows 11 gaming kiosk profile.
 
 .DESCRIPTION
-    Applies a reversible "gaming kiosk profile" focused on gaming performance
-    and stability while keeping core compatibility intact.
+    Applies a permanent "gaming kiosk profile" focused on gaming performance
+    and stability while keeping core compatibility intact. Changes persist
+    across reboots — there is no rollback path.
 
     Key goals:
       - Keep Windows gaming stack defaults that improve compatibility
       - Optionally configure auto-logon and console launcher at sign-in
       - Optionally replace shell for full-screen console experience
       - Apply conservative/aggressive service and startup reductions
-      - Persist state and generate rollback script for safe reversal
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
